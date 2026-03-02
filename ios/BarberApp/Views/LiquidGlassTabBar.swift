@@ -256,7 +256,9 @@ class LiquidGlassTabButton: UIView {
 
     @objc private func handleTap() {
         UIView.animate(withDuration: 0.1, animations: { self.transform = CGAffineTransform(scaleX: 0.88, y: 0.88) }) { _ in
-            UIView.animate(withDuration: 0.2, usingSpringWithDamping: 0.5, initialSpringVelocity: 0.8) { self.transform = .identity }
+            UIView.animate(withDuration: 0.2, delay: 0, usingSpringWithDamping: 0.5, initialSpringVelocity: 0.8, options: []) {
+                self.transform = .identity
+            }
         }
         onTap?(index)
     }
