@@ -241,7 +241,7 @@ private final class TabBarButton: UIView {
     @objc private func tapped() {
         UIView.animate(withDuration: 0.08,
                        animations: { self.transform = CGAffineTransform(scaleX: 0.85, y: 0.85) }) { _ in
-            UIView.animate(withDuration: 0.25,
+            UIView.animate(withDuration: 0.25, delay: 0,
                            usingSpringWithDamping: 0.5,
                            initialSpringVelocity: 0.8) { self.transform = .identity }
         }
