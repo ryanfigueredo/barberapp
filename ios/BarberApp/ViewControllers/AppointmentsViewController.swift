@@ -52,8 +52,19 @@ class AppointmentsViewController: UIViewController {
             segmentControl.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
         ])
         tableView.tableHeaderView = container
-        let w = view.bounds.width > 0 ? view.bounds.width : 390
-        container.frame = CGRect(x: 0, y: 0, width: w, height: 52)
+        // Frame será ajustado em viewDidLayoutSubviews quando tableView tiver largura válida
+        container.frame = CGRect(x: 0, y: 0, width: 0, height: 52)
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        if let header = tableView.tableHeaderView, header.bounds.width != tableView.bounds.width {
+            var frame = header.frame
+            frame.size.width = tableView.bounds.width
+            frame.size.height = 52
+            header.frame = frame
+            tableView.tableHeaderView = header
+        }
     }
 
     private func setupTableView() {
@@ -192,14 +203,14 @@ extension AppointmentsViewController: UITableViewDataSource, UITableViewDelegate
         let appt = appointments[ip.row]
         var actions: [UIContextualAction] = []
 
-        // Concluído (ícone checkmark) — para pendente, confirmado ou em andamento
+        // Concluído (ícone checkmark + título) — para pendente, confirmado ou em andamento
         if appt.status == .pending || appt.status == .confirmed || appt.status == .inProgress {
-            let done = UIContextualAction(style: .normal, title: nil) { [weak self] _, _, done in
+            let done = UIContextualAction(style: .normal, title: "Concluído") { [weak self] _, _, done in
                 self?.marcarConcluido(appt, at: ip)
                 done(true)
             }
             done.backgroundColor = BarberTheme.success
-            done.image = UIImage(systemName: "checkmark.circle.fill")
+            done.image = UIImage(systemName: "checkmark.circle.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .medium))
             actions.append(done)
         }
 
@@ -213,14 +224,14 @@ extension AppointmentsViewController: UITableViewDataSource, UITableViewDelegate
             actions.append(confirm)
         }
 
-        // Desmarcar (lixo) — cancela e avisa no WhatsApp
+        // Desmarcar (lixo + título) — cancela e avisa no WhatsApp
         if appt.status == .pending || appt.status == .confirmed {
-            let cancel = UIContextualAction(style: .destructive, title: nil) { [weak self] _, _, done in
+            let cancel = UIContextualAction(style: .destructive, title: "Desmarcar") { [weak self] _, _, done in
                 self?.desmarcarAgendamento(appt, at: ip)
                 done(true)
             }
             cancel.backgroundColor = BarberTheme.danger
-            cancel.image = UIImage(systemName: "trash.fill")
+            cancel.image = UIImage(systemName: "trash.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .medium))
             actions.append(cancel)
         }
 
@@ -268,7 +279,7 @@ class AppointmentRowCell: UITableViewCell {
         statusLabel.font = .systemFont(ofSize: 11, weight: .semibold)
         statusBadge.addSubview(statusLabel)
 
-        completedIcon.image = UIImage(systemName: "checkmark.circle.fill")
+        completedIcon.image = UIImage(systemName: "checkmark.circle.fill")?.withRenderingMode(.alwaysTemplate)
         completedIcon.tintColor = BarberTheme.success
         completedIcon.contentMode = .scaleAspectFit
         completedIcon.isHidden = true

@@ -9,6 +9,7 @@ struct ContentView: View {
     var body: some View {
         RootView()
             .preferredColorScheme(.dark)
+            .background(Color(red: 0.04, green: 0.04, blue: 0.04))
     }
 }
 

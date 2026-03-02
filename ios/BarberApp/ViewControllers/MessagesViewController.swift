@@ -22,11 +22,15 @@ class MessagesViewController: UIViewController {
         view.backgroundColor = BarberTheme.bg
         navigationController?.navigationBar.prefersLargeTitles = true
         setupTableView()
-        loadConversations()
 
         Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
             self?.loadConversations()
         }
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        loadConversations()
     }
 
     private func setupTableView() {

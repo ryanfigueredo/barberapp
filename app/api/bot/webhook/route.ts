@@ -16,10 +16,17 @@ export async function GET(request: NextRequest) {
   const token = searchParams.get('hub.verify_token');
   const challenge = searchParams.get('hub.challenge');
 
-  if (mode === 'subscribe' && token === META_VERIFY_TOKEN) {
-    return new NextResponse(challenge, { status: 200 });
+  if (mode !== 'subscribe' || token !== META_VERIFY_TOKEN) {
+    return NextResponse.json({ error: 'Invalid verify token or mode' }, { status: 403 });
   }
-  return NextResponse.json({ error: 'Invalid verify token' }, { status: 403 });
+  if (challenge == null || challenge === '') {
+    return NextResponse.json({ error: 'Missing hub.challenge' }, { status: 400 });
+  }
+
+  return new NextResponse(challenge, {
+    status: 200,
+    headers: { 'Content-Type': 'text/plain' },
+  });
 }
 
 export async function POST(request: NextRequest) {

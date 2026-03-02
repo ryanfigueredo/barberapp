@@ -23,6 +23,11 @@ final class MainTabViewController: UITabBarController {
         )
     }
 
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        view.window?.backgroundColor = BarberTheme.bg
+    }
+
     deinit {
         NotificationCenter.default.removeObserver(self, name: UIApplication.willEnterForegroundNotification, object: nil)
     }
@@ -77,7 +82,7 @@ final class MainTabViewController: UITabBarController {
     private func styleNav(_ nav: UINavigationController) {
         let a = UINavigationBarAppearance()
         a.configureWithOpaqueBackground()
-        a.backgroundColor = UIColor(white: 0.05, alpha: 1)
+        a.backgroundColor = BarberTheme.bg
         a.titleTextAttributes = [.foregroundColor: BarberTheme.gold,
                                  .font: UIFont.systemFont(ofSize: 18, weight: .bold)]
         a.largeTitleTextAttributes = [.foregroundColor: BarberTheme.gold,
@@ -93,13 +98,13 @@ final class MainTabViewController: UITabBarController {
     private func styleTabBar() {
         let appearance = UITabBarAppearance()
         appearance.configureWithOpaqueBackground()
-        appearance.backgroundColor = UIColor(white: 0.08, alpha: 1)
+        appearance.backgroundColor = BarberTheme.bg
         tabBar.standardAppearance = appearance
         tabBar.scrollEdgeAppearance = appearance
         tabBar.tintColor = BarberTheme.gold
         tabBar.unselectedItemTintColor = BarberTheme.textMuted
         tabBar.isTranslucent = false
-        tabBar.barTintColor = BarberTheme.surface
+        tabBar.barTintColor = BarberTheme.bg
     }
 
     @objc private func openSettings() {
