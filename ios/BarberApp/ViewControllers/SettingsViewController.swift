@@ -98,15 +98,9 @@ class SettingsViewController: UIViewController {
         logoutBtn.layer.borderColor = BarberTheme.danger.withAlphaComponent(0.25).cgColor
         logoutBtn.addTarget(self, action: #selector(logout), for: .touchUpInside)
 
-        let footer = UIView(frame: CGRect(x: 0, y: 0, width: view.bounds.width, height: 80))
-        footer.addSubview(logoutBtn)
-        logoutBtn.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            logoutBtn.leadingAnchor.constraint(equalTo: footer.leadingAnchor, constant: 16),
-            logoutBtn.trailingAnchor.constraint(equalTo: footer.trailingAnchor, constant: -16),
-            logoutBtn.topAnchor.constraint(equalTo: footer.topAnchor, constant: 16),
-            logoutBtn.heightAnchor.constraint(equalToConstant: 48),
-        ])
+        let footer = LogoutFooterView()
+        footer.logoutButton = logoutBtn
+        footer.frame = CGRect(x: 0, y: 0, width: 0, height: 80)
         tableView.tableFooterView = footer
     }
 
@@ -248,6 +242,19 @@ extension SettingsViewController: UIImagePickerControllerDelegate, UINavigationC
 
     func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
         picker.dismiss(animated: true)
+    }
+}
+
+// MARK: - LogoutFooterView
+/// Footer que posiciona o botão por frame em layoutSubviews para evitar constraints com width == 0.
+private final class LogoutFooterView: UIView {
+    weak var logoutButton: UIButton? { didSet { if let b = logoutButton { addSubview(b) } } }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        let w = bounds.width
+        guard w > 0, let btn = logoutButton else { return }
+        btn.frame = CGRect(x: 16, y: 16, width: w - 32, height: 48)
     }
 }
 

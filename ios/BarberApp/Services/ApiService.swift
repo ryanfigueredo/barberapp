@@ -203,6 +203,37 @@ struct ApiService {
         }.resume()
     }
 
+    /// Reagendar: atualiza a data/hora do agendamento (PATCH /api/app/appointments/:id com appointment_date).
+    func updateAppointmentDate(id: String, appointmentDate: Date, completion: @escaping (Result<Void, Error>) -> Void) {
+        guard let url = URL(string: baseURL + "/api/app/appointments/\(id)") else {
+            completion(.failure(ApiError.invalidURL))
+            return
+        }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let dateStr = formatter.string(from: appointmentDate)
+        var req = URLRequest(url: url)
+        req.httpMethod = "PATCH"
+        req.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
+        if let barberId = AuthService.shared.barberId {
+            req.setValue(barberId, forHTTPHeaderField: "X-Barber-Id")
+        }
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = (try? JSONEncoder().encode(["appointment_date": dateStr]))
+
+        URLSession.shared.dataTask(with: req) { _, res, err in
+            if let err = err {
+                DispatchQueue.main.async { completion(.failure(err)) }
+                return
+            }
+            guard let http = res as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+                DispatchQueue.main.async { completion(.failure(ApiError.status((res as? HTTPURLResponse)?.statusCode ?? 500))) }
+                return
+            }
+            DispatchQueue.main.async { completion(.success(())) }
+        }.resume()
+    }
+
     // MARK: - Barbers (callback para BarberFilterBar)
     func getBarbers(completion: @escaping (Result<[BarberInfo], Error>) -> Void) {
         fetch("/api/app/barbers", completion: completion)

@@ -41,29 +41,23 @@ class AppointmentsViewController: UIViewController {
         segmentControl.setTitleTextAttributes([.foregroundColor: UIColor.white], for: .normal)
         segmentControl.setTitleTextAttributes([.foregroundColor: UIColor.black], for: .selected)
         segmentControl.addTarget(self, action: #selector(filterChanged), for: .valueChanged)
+        segmentControl.autoresizingMask = [.flexibleWidth]
 
-        let container = UIView()
+        let w = max(view.bounds.width, UIScreen.main.bounds.width)
+        let headerW = w > 0 ? w : 320
+        let container = UIView(frame: CGRect(x: 0, y: 0, width: headerW, height: 52))
         container.addSubview(segmentControl)
-        segmentControl.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            segmentControl.topAnchor.constraint(equalTo: container.topAnchor, constant: 8),
-            segmentControl.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -8),
-            segmentControl.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
-            segmentControl.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
-        ])
+        segmentControl.frame = CGRect(x: 16, y: 8, width: headerW - 32, height: 36)
         tableView.tableHeaderView = container
-        // Frame será ajustado em viewDidLayoutSubviews quando tableView tiver largura válida
-        container.frame = CGRect(x: 0, y: 0, width: 0, height: 52)
     }
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        if let header = tableView.tableHeaderView, header.bounds.width != tableView.bounds.width {
-            var frame = header.frame
-            frame.size.width = tableView.bounds.width
-            frame.size.height = 52
-            header.frame = frame
-            tableView.tableHeaderView = header
+        let w = tableView.bounds.width
+        guard w > 0, let header = tableView.tableHeaderView else { return }
+        if abs(header.bounds.width - w) > 1 {
+            header.frame = CGRect(x: 0, y: 0, width: w, height: 52)
+            segmentControl.frame = CGRect(x: 16, y: 8, width: w - 32, height: 36)
         }
     }
 
@@ -105,7 +99,8 @@ class AppointmentsViewController: UIViewController {
             DispatchQueue.main.async {
                 self?.refreshControl.endRefreshing()
                 if case .success(let r) = result {
-                    self?.appointments = r.appointments
+                    // Excluídos (cancelados) saem da lista: mostrar apenas próximos/ativos
+                    self?.appointments = r.appointments.filter { $0.status != .cancelled }
                     self?.tableView.reloadData()
                     AppointmentNotificationService.shared.scheduleForAppointments(r.appointments)
                 }
@@ -138,6 +133,8 @@ class AppointmentsViewController: UIViewController {
             alert.addAction(UIAlertAction(title: motivo, style: .default) { [weak self] _ in
                 if motivo == "Outro" {
                     self?.pedirMotivoOutro(appt: appt, at: ip)
+                } else if motivo == "Reagendamento" {
+                    self?.abrirReagendamento(appt: appt, at: ip)
                 } else {
                     self?.confirmarDesmarcar(appt, motivo: motivo, at: ip)
                 }
@@ -149,6 +146,39 @@ class AppointmentsViewController: UIViewController {
             popover.sourceRect = cell.bounds
         }
         present(alert, animated: true)
+    }
+
+    /// Escolher novo dia e horário e reagendar (atualiza agendamento e avisa no WhatsApp).
+    private func abrirReagendamento(appt: Appointment, at ip: IndexPath) {
+        let vc = ReagendarViewController(appointment: appt)
+        vc.onReagendar = { [weak self] newDate in
+            self?.confirmarReagendar(appt, novaData: newDate, at: ip)
+        }
+        let nav = UINavigationController(rootViewController: vc)
+        nav.modalPresentationStyle = .pageSheet
+        present(nav, animated: true)
+    }
+
+    private func confirmarReagendar(_ appt: Appointment, novaData: Date, at ip: IndexPath) {
+        let fmt = DateFormatter()
+        fmt.dateStyle = .short
+        fmt.timeStyle = .short
+        fmt.locale = Locale(identifier: "pt_BR")
+        let dataStr = fmt.string(from: novaData)
+        let msg = "Seu agendamento foi reagendado para \(dataStr). Qualquer dúvida, entre em contato."
+        ApiService.shared.updateAppointmentDate(id: appt.id, appointmentDate: novaData) { [weak self] result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success:
+                    ApiService.shared.sendWhatsAppMessage(phone: appt.customerPhone, message: msg) { _ in }
+                    self?.loadAppointments()
+                case .failure:
+                    let alert = UIAlertController(title: "Erro", message: "Não foi possível reagendar.", preferredStyle: .alert)
+                    alert.addAction(UIAlertAction(title: "OK", style: .default))
+                    self?.present(alert, animated: true)
+                }
+            }
+        }
     }
 
     private func pedirMotivoOutro(appt: Appointment, at ip: IndexPath) {
@@ -189,7 +219,20 @@ extension AppointmentsViewController: UITableViewDataSource, UITableViewDelegate
 
     func tableView(_ tv: UITableView, cellForRowAt ip: IndexPath) -> UITableViewCell {
         let cell = tv.dequeueReusableCell(withIdentifier: "row", for: ip) as! AppointmentRowCell
-        cell.configure(with: appointments[ip.row])
+        let appt = appointments[ip.row]
+        cell.configure(
+            with: appt,
+            onVerDetalhes: { [weak self] in
+                let vc = AppointmentDetailViewController(appointment: appt)
+                self?.navigationController?.pushViewController(vc, animated: true)
+            },
+            onConcluir: { [weak self] in
+                self?.marcarConcluido(appt, at: ip)
+            },
+            onDesmarcar: { [weak self] in
+                self?.desmarcarAgendamento(appt, at: ip)
+            }
+        )
         return cell
     }
 
@@ -200,42 +243,7 @@ extension AppointmentsViewController: UITableViewDataSource, UITableViewDelegate
     }
 
     func tableView(_ tv: UITableView, trailingSwipeActionsConfigurationForRowAt ip: IndexPath) -> UISwipeActionsConfiguration? {
-        let appt = appointments[ip.row]
-        var actions: [UIContextualAction] = []
-
-        // Concluído (ícone checkmark + título) — para pendente, confirmado ou em andamento
-        if appt.status == .pending || appt.status == .confirmed || appt.status == .inProgress {
-            let done = UIContextualAction(style: .normal, title: "Concluído") { [weak self] _, _, done in
-                self?.marcarConcluido(appt, at: ip)
-                done(true)
-            }
-            done.backgroundColor = BarberTheme.success
-            done.image = UIImage(systemName: "checkmark.circle.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .medium))
-            actions.append(done)
-        }
-
-        // Confirmar (só para pendente)
-        if appt.status == .pending {
-            let confirm = UIContextualAction(style: .normal, title: "Confirmar") { [weak self] _, _, done in
-                self?.updateStatus(appt.id, status: "confirmed", at: ip)
-                done(true)
-            }
-            confirm.backgroundColor = BarberTheme.blue
-            actions.append(confirm)
-        }
-
-        // Desmarcar (lixo + título) — cancela e avisa no WhatsApp
-        if appt.status == .pending || appt.status == .confirmed {
-            let cancel = UIContextualAction(style: .destructive, title: "Desmarcar") { [weak self] _, _, done in
-                self?.desmarcarAgendamento(appt, at: ip)
-                done(true)
-            }
-            cancel.backgroundColor = BarberTheme.danger
-            cancel.image = UIImage(systemName: "trash.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .medium))
-            actions.append(cancel)
-        }
-
-        return UISwipeActionsConfiguration(actions: actions.reversed())
+        nil
     }
 }
 
@@ -247,9 +255,14 @@ class AppointmentRowCell: UITableViewCell {
     private let timeLabel = UILabel()
     private let nameLabel = UILabel()
     private let detailLabel = UILabel()
-    private let statusBadge = UIView()
-    private let statusLabel = UILabel()
-    private let completedIcon = UIImageView()
+    private let iconsStack = UIStackView()
+    private let btnVer = UIButton(type: .system)
+    private let btnConcluir = UIButton(type: .system)
+    private let btnDesmarcar = UIButton(type: .system)
+
+    private var onVerDetalhes: (() -> Void)?
+    private var onConcluir: (() -> Void)?
+    private var onDesmarcar: (() -> Void)?
 
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
@@ -275,24 +288,52 @@ class AppointmentRowCell: UITableViewCell {
         detailLabel.font = .systemFont(ofSize: 12)
         detailLabel.textColor = BarberTheme.textSecond
 
-        statusBadge.layer.cornerRadius = 8
-        statusLabel.font = .systemFont(ofSize: 11, weight: .semibold)
-        statusBadge.addSubview(statusLabel)
+        let iconSize: CGFloat = 14
+        let circleSize: CGFloat = 32
+        let cfg = UIImage.SymbolConfiguration(pointSize: iconSize, weight: .medium)
 
-        completedIcon.image = UIImage(systemName: "checkmark.circle.fill")?.withRenderingMode(.alwaysTemplate)
-        completedIcon.tintColor = BarberTheme.success
-        completedIcon.contentMode = .scaleAspectFit
-        completedIcon.isHidden = true
-        card.addSubview(completedIcon)
+        btnVer.setImage(UIImage(systemName: "eye.fill", withConfiguration: cfg), for: .normal)
+        btnVer.tintColor = BarberTheme.gold
+        btnVer.backgroundColor = BarberTheme.gold.withAlphaComponent(0.2)
+        btnVer.layer.cornerRadius = circleSize / 2
+        btnVer.clipsToBounds = true
+        btnVer.addTarget(self, action: #selector(tappedVer), for: .touchUpInside)
 
-        [timeLabel, nameLabel, detailLabel, statusBadge].forEach {
+        btnConcluir.setImage(UIImage(systemName: "checkmark", withConfiguration: cfg), for: .normal)
+        btnConcluir.tintColor = BarberTheme.success
+        btnConcluir.backgroundColor = BarberTheme.success.withAlphaComponent(0.2)
+        btnConcluir.layer.cornerRadius = circleSize / 2
+        btnConcluir.clipsToBounds = true
+        btnConcluir.addTarget(self, action: #selector(tappedConcluir), for: .touchUpInside)
+
+        btnDesmarcar.setImage(UIImage(systemName: "trash.fill", withConfiguration: cfg), for: .normal)
+        btnDesmarcar.tintColor = BarberTheme.danger
+        btnDesmarcar.backgroundColor = BarberTheme.danger.withAlphaComponent(0.2)
+        btnDesmarcar.layer.cornerRadius = circleSize / 2
+        btnDesmarcar.clipsToBounds = true
+        btnDesmarcar.addTarget(self, action: #selector(tappedDesmarcar), for: .touchUpInside)
+
+        [btnVer, btnConcluir, btnDesmarcar].forEach { btn in
+            btn.translatesAutoresizingMaskIntoConstraints = false
+            btn.widthAnchor.constraint(equalToConstant: circleSize).isActive = true
+            btn.heightAnchor.constraint(equalToConstant: circleSize).isActive = true
+        }
+
+        iconsStack.axis = .horizontal
+        iconsStack.spacing = 8
+        iconsStack.alignment = .center
+        iconsStack.addArrangedSubview(btnVer)
+        iconsStack.addArrangedSubview(btnConcluir)
+        iconsStack.addArrangedSubview(btnDesmarcar)
+        card.addSubview(iconsStack)
+
+        [timeLabel, nameLabel, detailLabel].forEach {
             card.addSubview($0)
             $0.translatesAutoresizingMaskIntoConstraints = false
         }
         colorStripe.translatesAutoresizingMaskIntoConstraints = false
         card.translatesAutoresizingMaskIntoConstraints = false
-        statusLabel.translatesAutoresizingMaskIntoConstraints = false
-        completedIcon.translatesAutoresizingMaskIntoConstraints = false
+        iconsStack.translatesAutoresizingMaskIntoConstraints = false
 
         NSLayoutConstraint.activate([
             card.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 5),
@@ -310,31 +351,33 @@ class AppointmentRowCell: UITableViewCell {
 
             nameLabel.leadingAnchor.constraint(equalTo: timeLabel.trailingAnchor, constant: 12),
             nameLabel.centerYAnchor.constraint(equalTo: timeLabel.centerYAnchor),
+            nameLabel.trailingAnchor.constraint(lessThanOrEqualTo: iconsStack.leadingAnchor, constant: -8),
 
             detailLabel.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 14),
             detailLabel.topAnchor.constraint(equalTo: timeLabel.bottomAnchor, constant: 6),
             detailLabel.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -14),
 
-            statusBadge.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -12),
-            statusBadge.centerYAnchor.constraint(equalTo: card.centerYAnchor),
-            statusBadge.heightAnchor.constraint(equalToConstant: 24),
-
-            completedIcon.trailingAnchor.constraint(equalTo: statusBadge.leadingAnchor, constant: -8),
-            completedIcon.centerYAnchor.constraint(equalTo: card.centerYAnchor),
-            completedIcon.widthAnchor.constraint(equalToConstant: 24),
-            completedIcon.heightAnchor.constraint(equalToConstant: 24),
-
-            statusLabel.centerXAnchor.constraint(equalTo: statusBadge.centerXAnchor),
-            statusLabel.centerYAnchor.constraint(equalTo: statusBadge.centerYAnchor),
-            statusLabel.leadingAnchor.constraint(equalTo: statusBadge.leadingAnchor, constant: 10),
-            statusLabel.trailingAnchor.constraint(equalTo: statusBadge.trailingAnchor, constant: -10),
+            iconsStack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -12),
+            iconsStack.centerYAnchor.constraint(equalTo: card.centerYAnchor),
         ])
     }
     required init?(coder: NSCoder) { fatalError() }
 
-    func configure(with appt: Appointment) {
-        let statusStr = appt.status.rawValue
-        let color = BarberTheme.statusColor(statusStr)
+    @objc private func tappedVer() { onVerDetalhes?() }
+    @objc private func tappedConcluir() { onConcluir?() }
+    @objc private func tappedDesmarcar() { onDesmarcar?() }
+
+    func configure(
+        with appt: Appointment,
+        onVerDetalhes: @escaping () -> Void,
+        onConcluir: @escaping () -> Void,
+        onDesmarcar: @escaping () -> Void
+    ) {
+        self.onVerDetalhes = onVerDetalhes
+        self.onConcluir = onConcluir
+        self.onDesmarcar = onDesmarcar
+
+        let color = BarberTheme.statusColor(appt.status.rawValue)
         colorStripe.backgroundColor = color
 
         if let d = ISO8601DateFormatter().date(from: appt.appointmentDate) {
@@ -345,12 +388,56 @@ class AppointmentRowCell: UITableViewCell {
         nameLabel.text = appt.customerName
         detailLabel.text = "\(appt.barber.name)\(appt.service.map { " · \($0.name) · R$\(String(format: "%.0f", $0.price))" } ?? "")"
 
-        statusLabel.text = BarberTheme.statusLabel(statusStr)
-        statusLabel.textColor = color
-        statusBadge.backgroundColor = color.withAlphaComponent(0.15)
-        statusBadge.layer.borderWidth = 1
-        statusBadge.layer.borderColor = color.withAlphaComponent(0.3).cgColor
+        btnVer.isHidden = false
+        btnConcluir.isHidden = !(appt.status == .pending || appt.status == .confirmed || appt.status == .inProgress)
+        btnDesmarcar.isHidden = !(appt.status == .pending || appt.status == .confirmed)
+    }
+}
 
-        completedIcon.isHidden = appt.status != .completed
+// MARK: - ReagendarViewController
+/// Modal para escolher novo dia e horário ao reagendar um agendamento.
+final class ReagendarViewController: UIViewController {
+
+    private let appointment: Appointment
+    private let datePicker = UIDatePicker()
+    var onReagendar: ((Date) -> Void)?
+
+    init(appointment: Appointment) {
+        self.appointment = appointment
+        super.init(nibName: nil, bundle: nil)
+    }
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = "Novo dia e horário"
+        view.backgroundColor = BarberTheme.bg
+        navigationItem.leftBarButtonItem = UIBarButtonItem(barButtonSystemItem: .cancel, target: self, action: #selector(cancelar))
+        navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Reagendar", style: .done, target: self, action: #selector(reagendar))
+        navigationItem.rightBarButtonItem?.tintColor = BarberTheme.gold
+
+        datePicker.datePickerMode = .dateAndTime
+        datePicker.minimumDate = Date()
+        datePicker.preferredDatePickerStyle = .wheels
+        datePicker.backgroundColor = BarberTheme.surface
+        datePicker.tintColor = BarberTheme.gold
+        if let d = ISO8601DateFormatter().date(from: appointment.appointmentDate) {
+            datePicker.date = d > Date() ? d : Date()
+        }
+        view.addSubview(datePicker)
+        datePicker.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            datePicker.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            datePicker.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 20),
+        ])
+    }
+
+    @objc private func cancelar() {
+        dismiss(animated: true)
+    }
+
+    @objc private func reagendar() {
+        onReagendar?(datePicker.date)
+        dismiss(animated: true)
     }
 }

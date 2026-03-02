@@ -1,5 +1,6 @@
 /**
  * GET /api/app/appointments/[id]
+ * PATCH /api/app/appointments/[id] — atualizar (ex.: reagendar data/hora)
  * DELETE /api/app/appointments/[id]
  */
 
@@ -74,6 +75,47 @@ export async function DELETE(
         data: { status: 'available', appointment_id: null },
       });
     }
+  });
+
+  return NextResponse.json({ success: true });
+}
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const tenant = await getTenantFromRequest(request);
+  if (!tenant) {
+    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+  }
+
+  const { id } = await params;
+  const appointment = await prisma.appointment.findFirst({
+    where: { id, tenant_id: tenant.id },
+  });
+
+  if (!appointment) {
+    return NextResponse.json({ error: 'Agendamento não encontrado' }, { status: 404 });
+  }
+
+  const body = await request.json().catch(() => ({}));
+  const newDate = body.appointment_date ? new Date(body.appointment_date as string) : null;
+
+  if (!newDate || Number.isNaN(newDate.getTime())) {
+    return NextResponse.json({ error: 'appointment_date inválido' }, { status: 400 });
+  }
+
+  await prisma.$transaction(async (tx) => {
+    if (appointment.slot_id) {
+      await tx.slot.update({
+        where: { id: appointment.slot_id },
+        data: { status: 'available', appointment_id: null },
+      });
+    }
+    await tx.appointment.update({
+      where: { id },
+      data: { appointment_date: newDate, slot_id: null },
+    });
   });
 
   return NextResponse.json({ success: true });

@@ -12,6 +12,7 @@ final class MainTabViewController: UITabBarController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = BarberTheme.bg
+        delegate = self
         setupViewControllers()
         styleTabBar()
         requestNotificationPermissionAndSchedule()
@@ -26,6 +27,25 @@ final class MainTabViewController: UITabBarController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         view.window?.backgroundColor = BarberTheme.bg
+        addSettingsButtonToCurrentNavIfNeeded()
+    }
+
+    /// Adia a definição do rightBarButtonItem para quando a view já estiver na janela, reduzindo conflitos de constraint na NavigationButtonBar.
+    private func addSettingsButtonToCurrentNavIfNeeded() {
+        guard let nav = selectedViewController as? UINavigationController else { return }
+        addSettingsButtonToNavIfNeeded(for: nav)
+    }
+
+    private func addSettingsButtonToNavIfNeeded(for viewController: UIViewController) {
+        guard let nav = viewController as? UINavigationController,
+              let vc = nav.topViewController,
+              !(vc is MoreViewController),
+              vc.navigationItem.rightBarButtonItem == nil else { return }
+        vc.navigationItem.rightBarButtonItem = UIBarButtonItem(
+            image: UIImage(systemName: "gearshape.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 16, weight: .medium)),
+            style: .plain, target: self, action: #selector(openSettings)
+        )
+        vc.navigationItem.rightBarButtonItem?.tintColor = BarberTheme.gold
     }
 
     deinit {
@@ -68,13 +88,7 @@ final class MainTabViewController: UITabBarController {
             styleNav(nav)
             let item = UITabBarItem(title: title, image: UIImage(systemName: icon), selectedImage: UIImage(systemName: icon))
             nav.tabBarItem = item
-            if !(vc is MoreViewController) {
-                vc.navigationItem.rightBarButtonItem = UIBarButtonItem(
-                    image: UIImage(systemName: "gearshape.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 16, weight: .medium)),
-                    style: .plain, target: self, action: #selector(openSettings)
-                )
-                vc.navigationItem.rightBarButtonItem?.tintColor = BarberTheme.gold
-            }
+            // rightBarButtonItem (engrenagem) é definido em viewDidAppear para evitar constraints com width == 0 na NavigationButtonBar
             return nav
         }
     }
@@ -112,5 +126,11 @@ final class MainTabViewController: UITabBarController {
         styleNav(nav)
         nav.modalPresentationStyle = .formSheet
         present(nav, animated: true)
+    }
+}
+
+extension MainTabViewController: UITabBarControllerDelegate {
+    func tabBarController(_ tabBarController: UITabBarController, didSelect viewController: UIViewController) {
+        addSettingsButtonToNavIfNeeded(for: viewController)
     }
 }
