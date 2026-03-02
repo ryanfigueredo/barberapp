@@ -20,6 +20,8 @@ class LoginViewController: UIViewController {
     private let loadingIndicator = UIActivityIndicatorView(style: .medium)
     private let glassCard = UIView()
 
+    override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = BarberTheme.bg

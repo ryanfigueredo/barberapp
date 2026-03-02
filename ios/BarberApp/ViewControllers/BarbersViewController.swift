@@ -14,6 +14,8 @@ class BarbersViewController: UIViewController {
     private let emptyLabel = UILabel()
     private let refreshControl = UIRefreshControl()
 
+    override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         title = "Barbeiros"

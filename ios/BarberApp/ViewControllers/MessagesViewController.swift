@@ -14,6 +14,8 @@ class MessagesViewController: UIViewController {
     private let emptyLabel = UILabel()
     private var refreshControl = UIRefreshControl()
 
+    override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         title = "Mensagens"

@@ -7,78 +7,81 @@
 
 import UIKit
 
-class MainTabViewController: UIViewController {
+final class MainTabViewController: UIViewController {
 
     private let tabBar = LiquidGlassTabBar()
-    private var viewControllers: [UIViewController] = []
-    private var currentVC: UIViewController?
-    private var currentIndex: Int = 0
+    private var vcs: [UINavigationController] = []
+    private var currentIndex = 0
+    private weak var currentVC: UIViewController?
 
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = BarberTheme.bg
-        setupViewControllers()
-        setupTabBar()
-        showViewController(at: 0)
+        buildViewControllers()
+        addTabBar()
+        show(index: 0, animated: false)
     }
 
-    private func setupViewControllers() {
-        viewControllers = [
-            wrapInNav(CalendarViewController(), title: "Calendário"),
-            wrapInNav(AppointmentsViewController(), title: "Agendamentos"),
-            wrapInNav(BarbersViewController(), title: "Barbeiros"),
-            wrapInNav(ServicesViewController(), title: "Serviços"),
-            wrapInNav(MessagesViewController(), title: "Mensagens"),
+    override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
+    override var childForStatusBarStyle: UIViewController? { currentVC }
+
+    // MARK: - Setup
+    private func buildViewControllers() {
+        let pairs: [(UIViewController, String)] = [
+            (CalendarViewController(),      "Calendário"),
+            (AppointmentsViewController(),  "Agendamentos"),
+            (BarbersViewController(),       "Barbeiros"),
+            (ServicesViewController(),      "Serviços"),
+            (MessagesViewController(),      "Mensagens"),
         ]
-    }
-
-    private func wrapInNav(_ vc: UIViewController, title: String) -> UINavigationController {
-        let nav = UINavigationController(rootViewController: vc)
-        vc.navigationItem.title = title
-
-        let appearance = UINavigationBarAppearance()
-        appearance.configureWithOpaqueBackground()
-        appearance.backgroundColor = UIColor(white: 0.06, alpha: 0.97)
-        appearance.titleTextAttributes = [
-            .foregroundColor: BarberTheme.gold,
-            .font: UIFont.systemFont(ofSize: 18, weight: .bold),
-        ]
-        appearance.largeTitleTextAttributes = [
-            .foregroundColor: BarberTheme.gold,
-            .font: UIFont.systemFont(ofSize: 30, weight: .bold),
-        ]
-        nav.navigationBar.standardAppearance = appearance
-        nav.navigationBar.scrollEdgeAppearance = appearance
-        nav.navigationBar.tintColor = BarberTheme.gold
-
-        let settingsBtn = UIBarButtonItem(
-            image: UIImage(systemName: "gearshape.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .medium)),
-            style: .plain,
-            target: self,
-            action: #selector(openSettings)
-        )
-        vc.navigationItem.rightBarButtonItem = settingsBtn
-
-        return nav
-    }
-
-    private func setupTabBar() {
-        view.addSubview(tabBar)
-        tabBar.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            tabBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: BarberTheme.tabBarSideMargin),
-            tabBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -BarberTheme.tabBarSideMargin),
-            tabBar.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -BarberTheme.tabBarBottomOffset),
-            tabBar.heightAnchor.constraint(equalToConstant: BarberTheme.tabBarHeight),
-        ])
-        tabBar.onSelect = { [weak self] index in
-            self?.showViewController(at: index)
+        vcs = pairs.map { (vc, title) in
+            vc.title = title
+            let nav  = UINavigationController(rootViewController: vc)
+            styleNav(nav)
+            vc.navigationItem.rightBarButtonItem = UIBarButtonItem(
+                image: UIImage(systemName: "gearshape.fill",
+                               withConfiguration: UIImage.SymbolConfiguration(pointSize: 16, weight: .medium)),
+                style: .plain, target: self, action: #selector(openSettings)
+            )
+            vc.navigationItem.rightBarButtonItem?.tintColor = BarberTheme.gold
+            return nav
         }
     }
 
-    private func showViewController(at index: Int) {
-        guard index < viewControllers.count else { return }
-        let newVC = viewControllers[index]
+    private func styleNav(_ nav: UINavigationController) {
+        let a = UINavigationBarAppearance()
+        a.configureWithOpaqueBackground()
+        a.backgroundColor         = UIColor(white: 0.05, alpha: 1)
+        a.titleTextAttributes     = [.foregroundColor: BarberTheme.gold,
+                                     .font: UIFont.systemFont(ofSize: 18, weight: .bold)]
+        a.largeTitleTextAttributes = [.foregroundColor: BarberTheme.gold,
+                                      .font: UIFont.systemFont(ofSize: 32, weight: .heavy)]
+        nav.navigationBar.standardAppearance   = a
+        nav.navigationBar.scrollEdgeAppearance = a
+        nav.navigationBar.compactAppearance    = a
+        nav.navigationBar.isTranslucent        = false
+        nav.navigationBar.tintColor            = BarberTheme.gold
+        nav.navigationBar.prefersLargeTitles   = true
+    }
+
+    private func addTabBar() {
+        view.addSubview(tabBar)
+        tabBar.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            tabBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
+            tabBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            tabBar.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -28),
+            tabBar.heightAnchor.constraint(equalToConstant: 68),
+        ])
+        tabBar.onSelect = { [weak self] index in
+            self?.show(index: index, animated: true)
+        }
+    }
+
+    // MARK: - Navigation
+    private func show(index: Int, animated: Bool) {
+        guard index < vcs.count else { return }
+        let newVC = vcs[index]
 
         if let current = currentVC {
             current.willMove(toParent: nil)
@@ -93,28 +96,25 @@ class MainTabViewController: UIViewController {
             newVC.view.topAnchor.constraint(equalTo: view.topAnchor),
             newVC.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             newVC.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            newVC.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            newVC.view.bottomAnchor.constraint(equalTo: tabBar.topAnchor),
         ])
         newVC.didMove(toParent: self)
 
-        if currentVC != nil {
+        if animated && currentVC != nil {
             newVC.view.alpha = 0
-            UIView.animate(withDuration: 0.22) { newVC.view.alpha = 1 }
+            UIView.animate(withDuration: 0.2) { newVC.view.alpha = 1 }
         }
 
-        currentVC = newVC
+        currentVC    = newVC
         currentIndex = index
         tabBar.selectedIndex = index
+        setNeedsStatusBarAppearanceUpdate()
     }
 
     @objc private func openSettings() {
-        let vc = SettingsViewController()
-        let nav = UINavigationController(rootViewController: vc)
+        let nav = UINavigationController(rootViewController: SettingsViewController())
+        styleNav(nav)
         nav.modalPresentationStyle = .formSheet
         present(nav, animated: true)
-    }
-
-    func setBadge(_ count: Int, forTab index: Int) {
-        tabBar.setBadge(count, at: index)
     }
 }

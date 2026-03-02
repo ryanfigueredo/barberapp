@@ -16,6 +16,8 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = request.nextUrl;
   const date = searchParams.get('date');
+  const startParam = searchParams.get('start');
+  const endParam = searchParams.get('end');
   const barberIdParam = searchParams.get('barber_id');
   const statusFilter = searchParams.get('status');
   const upcoming = searchParams.get('upcoming') === 'true';
@@ -27,7 +29,11 @@ export async function GET(request: NextRequest) {
     const statuses = statusFilter.split(',').map((s) => s.trim());
     where.status = { in: statuses };
   }
-  if (date) {
+  if (startParam && endParam) {
+    const start = new Date(startParam + 'T00:00:00.000Z');
+    const end = new Date(endParam + 'T23:59:59.999Z');
+    where.appointment_date = { gte: start, lte: end };
+  } else if (date) {
     const start = new Date(date + 'T00:00:00.000Z');
     const end = new Date(date + 'T23:59:59.999Z');
     where.appointment_date = { gte: start, lte: end };

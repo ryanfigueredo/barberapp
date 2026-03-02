@@ -50,6 +50,46 @@ struct ApiService {
         }.resume()
     }
 
+    // MARK: - POST genérico (criar agendamento, etc.)
+    func post(_ path: String, body: [String: Any], completion: @escaping (Result<Data, Error>) -> Void) {
+        guard let url = URL(string: baseURL + path) else {
+            completion(.failure(ApiError.invalidURL))
+            return
+        }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
+        if let barberId = AuthService.shared.barberId {
+            req.setValue(barberId, forHTTPHeaderField: "X-Barber-Id")
+        }
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        guard let data = try? JSONSerialization.data(withJSONObject: body) else {
+            completion(.failure(ApiError.invalidURL))
+            return
+        }
+        req.httpBody = data
+
+        URLSession.shared.dataTask(with: req) { data, res, err in
+            if let err = err {
+                DispatchQueue.main.async { completion(.failure(err)) }
+                return
+            }
+            guard let http = res as? HTTPURLResponse else {
+                DispatchQueue.main.async { completion(.failure(ApiError.noResponse)) }
+                return
+            }
+            guard (200...299).contains(http.statusCode) else {
+                if let data = data, let errResp = try? JSONDecoder().decode(ErrorResponse.self, from: data) {
+                    DispatchQueue.main.async { completion(.failure(ApiError.server(errResp.error))) }
+                } else {
+                    DispatchQueue.main.async { completion(.failure(ApiError.status(http.statusCode))) }
+                }
+                return
+            }
+            DispatchQueue.main.async { completion(.success(data ?? Data())) }
+        }.resume()
+    }
+
     // MARK: - Tenant profile
     func getTenantProfile(completion: @escaping (Result<TenantProfile, Error>) -> Void) {
         fetch("/api/admin/tenant-profile", completion: completion)
@@ -261,6 +301,24 @@ struct MonthAppointmentsResponse: Decodable {
     struct DayCount: Decodable {
         let count: Int?
         let statuses: [String]?
+    }
+}
+
+struct SlotsResponse: Decodable {
+    let slots: [Slot]
+}
+
+struct Slot: Decodable {
+    let id: String
+    let startTime: String
+    let endTime: String
+    let time: String?
+    let barber: BarberInfo?
+
+    enum CodingKeys: String, CodingKey {
+        case id, time, barber
+        case startTime = "start_time"
+        case endTime = "end_time"
     }
 }
 

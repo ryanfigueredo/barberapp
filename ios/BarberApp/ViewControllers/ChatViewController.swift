@@ -26,6 +26,8 @@ class ChatViewController: UIViewController {
     }
     required init?(coder: NSCoder) { fatalError() }
 
+    override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         title = customerName ?? phone
