@@ -130,7 +130,66 @@ class SettingsViewController: UIViewController {
         let picker = UIImagePickerController()
         picker.delegate = self
         picker.sourceType = .photoLibrary
+        picker.mediaTypes = ["public.image"]
         present(picker, animated: true)
+    }
+
+    private func uploadLogo(_ image: UIImage) {
+        guard let data = image.jpegData(compressionQuality: 0.85) else { return }
+        let contentType = "image/jpeg"
+
+        let loading = UIAlertController(title: "Enviando logo…", message: nil, preferredStyle: .alert)
+        present(loading, animated: true)
+
+        ApiService.shared.requestLogoUploadURL(contentType: contentType) { [weak self] result in
+            switch result {
+            case .success(let response):
+                ApiService.shared.uploadImageToURL(response.uploadUrl, imageData: data, contentType: contentType) { uploadResult in
+                    DispatchQueue.main.async {
+                        loading.dismiss(animated: true)
+                        switch uploadResult {
+                        case .success:
+                            ApiService.shared.updateTenantProfile(["logo_url": response.publicUrl]) { [weak self] updateResult in
+                                DispatchQueue.main.async {
+                                    switch updateResult {
+                                    case .success:
+                                        self?.reloadProfileHeader()
+                                        let ok = UIAlertController(title: "Logo atualizada", message: "A logo da barbearia foi salva.", preferredStyle: .alert)
+                                        ok.addAction(UIAlertAction(title: "OK", style: .default))
+                                        self?.present(ok, animated: true)
+                                    case .failure(let err):
+                                        self?.showError("Não foi possível salvar a logo: \(err.localizedDescription)")
+                                    }
+                                }
+                            }
+                        case .failure(let err):
+                            self?.showError("Falha no upload: \(err.localizedDescription)")
+                        }
+                    }
+                }
+            case .failure(let err):
+                DispatchQueue.main.async {
+                    loading.dismiss(animated: true)
+                    self?.showError("Não foi possível obter a URL de upload. Configure AWS no servidor.\n\(err.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    private func reloadProfileHeader() {
+        ApiService.shared.getTenantProfile { [weak self] result in
+            DispatchQueue.main.async {
+                if case .success(let p) = result, let header = self?.tableView.tableHeaderView as? TenantHeaderView {
+                    header.configure(profile: p)
+                }
+            }
+        }
+    }
+
+    private func showError(_ message: String) {
+        let alert = UIAlertController(title: "Erro", message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
     }
 
     private func openBotSetup() {
@@ -182,7 +241,13 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
 
 extension SettingsViewController: UIImagePickerControllerDelegate, UINavigationControllerDelegate {
     func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
-        dismiss(animated: true)
+        picker.dismiss(animated: true)
+        guard let image = info[.originalImage] as? UIImage else { return }
+        uploadLogo(image)
+    }
+
+    func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+        picker.dismiss(animated: true)
     }
 }
 
@@ -212,6 +277,7 @@ class SettingsCell: UITableViewCell {
 class TenantHeaderView: UIView {
 
     private let avatarView = UIView()
+    private let avatarImageView = UIImageView()
     private let avatarLabel = UILabel()
     private let nameLabel = UILabel()
     private let slugLabel = UILabel()
@@ -222,7 +288,13 @@ class TenantHeaderView: UIView {
         avatarView.layer.cornerRadius = 36
         avatarView.layer.borderWidth = 2
         avatarView.layer.borderColor = BarberTheme.goldDim.cgColor
+        avatarView.clipsToBounds = true
         addSubview(avatarView)
+
+        avatarImageView.contentMode = .scaleAspectFill
+        avatarImageView.clipsToBounds = true
+        avatarImageView.isHidden = true
+        avatarView.addSubview(avatarImageView)
 
         avatarLabel.font = .systemFont(ofSize: 28, weight: .bold)
         avatarLabel.textColor = BarberTheme.gold
@@ -237,12 +309,16 @@ class TenantHeaderView: UIView {
         slugLabel.textColor = BarberTheme.textSecond
         addSubview(slugLabel)
 
-        [avatarView, avatarLabel, nameLabel, slugLabel].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
+        [avatarView, avatarImageView, avatarLabel, nameLabel, slugLabel].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
         NSLayoutConstraint.activate([
             avatarView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 20),
             avatarView.centerYAnchor.constraint(equalTo: centerYAnchor),
             avatarView.widthAnchor.constraint(equalToConstant: 72),
             avatarView.heightAnchor.constraint(equalToConstant: 72),
+            avatarImageView.topAnchor.constraint(equalTo: avatarView.topAnchor),
+            avatarImageView.leadingAnchor.constraint(equalTo: avatarView.leadingAnchor),
+            avatarImageView.trailingAnchor.constraint(equalTo: avatarView.trailingAnchor),
+            avatarImageView.bottomAnchor.constraint(equalTo: avatarView.bottomAnchor),
             avatarLabel.centerXAnchor.constraint(equalTo: avatarView.centerXAnchor),
             avatarLabel.centerYAnchor.constraint(equalTo: avatarView.centerYAnchor),
             nameLabel.leadingAnchor.constraint(equalTo: avatarView.trailingAnchor, constant: 16),
@@ -256,6 +332,25 @@ class TenantHeaderView: UIView {
     func configure(profile: TenantProfile) {
         nameLabel.text = profile.name
         slugLabel.text = "@\(profile.slug ?? "")"
-        avatarLabel.text = String(profile.name.prefix(1)).uppercased()
+
+        if let urlString = profile.logo_url, let url = URL(string: urlString) {
+            avatarLabel.isHidden = true
+            avatarImageView.isHidden = false
+            loadImage(from: url)
+        } else {
+            avatarImageView.isHidden = true
+            avatarImageView.image = nil
+            avatarLabel.isHidden = false
+            avatarLabel.text = String(profile.name.prefix(1)).uppercased()
+        }
+    }
+
+    private func loadImage(from url: URL) {
+        URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
+            guard let data = data, let image = UIImage(data: data) else { return }
+            DispatchQueue.main.async {
+                self?.avatarImageView.image = image
+            }
+        }.resume()
     }
 }

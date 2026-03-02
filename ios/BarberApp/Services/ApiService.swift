@@ -126,6 +126,55 @@ struct ApiService {
         }.resume()
     }
 
+    // MARK: - Logo upload (AWS S3 pré-assinado)
+    struct LogoUploadResponse: Decodable {
+        let uploadUrl: String
+        let publicUrl: String
+        enum CodingKeys: String, CodingKey {
+            case uploadUrl = "uploadUrl"
+            case publicUrl = "publicUrl"
+        }
+    }
+
+    func requestLogoUploadURL(contentType: String = "image/jpeg", completion: @escaping (Result<LogoUploadResponse, Error>) -> Void) {
+        post("/api/admin/upload/logo", body: ["contentType": contentType]) { result in
+            switch result {
+            case .success(let data):
+                do {
+                    let decoded = try JSONDecoder().decode(LogoUploadResponse.self, from: data)
+                    DispatchQueue.main.async { completion(.success(decoded)) }
+                } catch {
+                    DispatchQueue.main.async { completion(.failure(error)) }
+                }
+            case .failure(let err):
+                DispatchQueue.main.async { completion(.failure(err)) }
+            }
+        }
+    }
+
+    func uploadImageToURL(_ uploadURLString: String, imageData: Data, contentType: String, completion: @escaping (Result<Void, Error>) -> Void) {
+        guard let url = URL(string: uploadURLString) else {
+            completion(.failure(ApiError.invalidURL))
+            return
+        }
+        var req = URLRequest(url: url)
+        req.httpMethod = "PUT"
+        req.setValue(contentType, forHTTPHeaderField: "Content-Type")
+        req.httpBody = imageData
+
+        URLSession.shared.dataTask(with: req) { _, res, err in
+            if let err = err {
+                DispatchQueue.main.async { completion(.failure(err)) }
+                return
+            }
+            guard let http = res as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+                DispatchQueue.main.async { completion(.failure(ApiError.status((res as? HTTPURLResponse)?.statusCode ?? 500))) }
+                return
+            }
+            DispatchQueue.main.async { completion(.success(())) }
+        }.resume()
+    }
+
     // MARK: - Appointment status
     func updateAppointmentStatus(id: String, status: String, completion: @escaping (Result<Void, Error>) -> Void) {
         guard let url = URL(string: baseURL + "/api/app/appointments/\(id)/status") else {
@@ -242,8 +291,35 @@ struct ApiService {
     }
 
     func sendWhatsAppMessage(phone: String, message: String, completion: @escaping (Result<Void, Error>) -> Void) {
-        // TODO: POST enviar mensagem via API
-        completion(.success(()))
+        guard let url = URL(string: baseURL + "/api/admin/whatsapp/send") else {
+            completion(.failure(ApiError.invalidURL))
+            return
+        }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
+        if let barberId = AuthService.shared.barberId {
+            req.setValue(barberId, forHTTPHeaderField: "X-Barber-Id")
+        }
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = (try? JSONSerialization.data(withJSONObject: ["phone": phone, "message": message]))
+
+        URLSession.shared.dataTask(with: req) { data, res, err in
+            if let err = err {
+                DispatchQueue.main.async { completion(.failure(err)) }
+                return
+            }
+            guard let http = res as? HTTPURLResponse else {
+                DispatchQueue.main.async { completion(.failure(ApiError.noResponse)) }
+                return
+            }
+            guard (200...299).contains(http.statusCode) else {
+                let msg = (data.flatMap { Self.parseErrorString(from: $0) }) ?? "Erro \(http.statusCode)"
+                DispatchQueue.main.async { completion(.failure(ApiError.server(msg))) }
+                return
+            }
+            DispatchQueue.main.async { completion(.success(())) }
+        }.resume()
     }
 }
 

@@ -39,7 +39,7 @@ final class MainTabViewController: UITabBarController {
     }
 
     private func fetchUpcomingAndScheduleNotifications() {
-        ApiService.shared.fetch("/api/app/appointments?upcoming=true") { [weak self] (result: Result<AppointmentsResponse, Error>) in
+        ApiService.shared.fetch("/api/app/appointments?upcoming=true") { (result: Result<AppointmentsResponse, Error>) in
             if case .success(let r) = result {
                 AppointmentNotificationService.shared.scheduleForAppointments(r.appointments)
             }
@@ -49,30 +49,27 @@ final class MainTabViewController: UITabBarController {
     override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
 
     private func setupViewControllers() {
-        let pairs: [(UIViewController, String, String)] = [
+        // Tabs: Visão, Calendário, Agendamentos, Mensagens, Mais
+        let tabPairs: [(UIViewController, String, String)] = [
             (DashboardViewController(), "Visão", "chart.bar.fill"),
             (CalendarViewController(), "Calendário", "calendar"),
             (AppointmentsViewController(), "Agendamentos", "list.bullet.clipboard.fill"),
-            (BarbersViewController(), "Barbeiros", "person.2.fill"),
-            (ServicesViewController(), "Serviços", "scissors"),
             (MessagesViewController(), "Mensagens", "bubble.left.and.bubble.right.fill"),
+            (MoreViewController(), "Mais", "ellipsis.circle.fill"),
         ]
-        viewControllers = pairs.map { vc, title, icon in
+        viewControllers = tabPairs.map { vc, title, icon in
             vc.title = title
             let nav = UINavigationController(rootViewController: vc)
             styleNav(nav)
-            let item = UITabBarItem(
-                title: title,
-                image: UIImage(systemName: icon),
-                selectedImage: UIImage(systemName: icon)
-            )
+            let item = UITabBarItem(title: title, image: UIImage(systemName: icon), selectedImage: UIImage(systemName: icon))
             nav.tabBarItem = item
-            vc.navigationItem.rightBarButtonItem = UIBarButtonItem(
-                image: UIImage(systemName: "gearshape.fill",
-                               withConfiguration: UIImage.SymbolConfiguration(pointSize: 16, weight: .medium)),
-                style: .plain, target: self, action: #selector(openSettings)
-            )
-            vc.navigationItem.rightBarButtonItem?.tintColor = BarberTheme.gold
+            if !(vc is MoreViewController) {
+                vc.navigationItem.rightBarButtonItem = UIBarButtonItem(
+                    image: UIImage(systemName: "gearshape.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 16, weight: .medium)),
+                    style: .plain, target: self, action: #selector(openSettings)
+                )
+                vc.navigationItem.rightBarButtonItem?.tintColor = BarberTheme.gold
+            }
             return nav
         }
     }

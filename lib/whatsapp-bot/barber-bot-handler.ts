@@ -81,6 +81,16 @@ async function sendWhatsAppMessage(
   toPhone: string,
   message: string
 ): Promise<void> {
+  const r = await sendWhatsAppMessageFromTenant(tenantId, toPhone, message);
+  if (!r.ok) throw new Error(r.error);
+}
+
+/** Exportado para uso na API de envio (app admin / mobile). */
+export async function sendWhatsAppMessageFromTenant(
+  tenantId: string,
+  toPhone: string,
+  message: string
+): Promise<{ ok: boolean; error?: string }> {
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
     select: { meta_phone_number_id: true, meta_access_token: true },
@@ -88,7 +98,7 @@ async function sendWhatsAppMessage(
 
   if (!tenant?.meta_phone_number_id || !tenant?.meta_access_token) {
     console.error('[BarberBot] Tenant sem WhatsApp configurado:', tenantId);
-    return;
+    return { ok: false, error: 'WhatsApp não configurado' };
   }
 
   const phoneId = tenant.meta_phone_number_id;
@@ -116,8 +126,9 @@ async function sendWhatsAppMessage(
   if (!res.ok) {
     const err = await res.text();
     console.error('[BarberBot] Erro ao enviar mensagem:', res.status, err);
-    throw new Error(`WhatsApp API error: ${res.status}`);
+    return { ok: false, error: `WhatsApp API: ${res.status}` };
   }
+  return { ok: true };
 }
 
 // ============ STATE HANDLERS ============

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Eye, EyeOff, Copy } from 'lucide-react';
 
 interface Tenant {
   id: string;
@@ -71,19 +72,20 @@ export default function SettingsPage() {
             <button
               type="button"
               onClick={() => setShowApiKey((v) => !v)}
-              className="px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white/80 hover:text-white hover:border-white/20 transition"
+              className="p-3 bg-white/5 border border-white/10 rounded-lg text-white/80 hover:text-white hover:border-white/20 transition flex items-center justify-center"
               aria-label={showApiKey ? 'Ocultar API Key' : 'Mostrar API Key'}
               title={showApiKey ? 'Ocultar' : 'Mostrar'}
             >
-              {showApiKey ? '🙈' : '👁️'}
+              {showApiKey ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
             </button>
             <button
               type="button"
               onClick={copyApiKey}
               disabled={!apiKey.trim()}
-              className="px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white/80 hover:text-white hover:border-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition"
+              className="px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white/80 hover:text-white hover:border-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition flex items-center gap-2"
               title="Copiar API Key"
             >
+              <Copy className="w-4 h-4" />
               Copiar
             </button>
             <button

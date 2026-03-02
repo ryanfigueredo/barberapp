@@ -118,6 +118,58 @@ class AppointmentsViewController: UIViewController {
             }
         }
     }
+
+    /// Desmarca o corte: pergunta motivo, cancela e avisa o cliente no WhatsApp.
+    private func desmarcarAgendamento(_ appt: Appointment, at ip: IndexPath) {
+        let motivos = ["Cliente solicitou", "Reagendamento", "Falta de disponibilidade", "Horário indisponível", "Outro"]
+        let alert = UIAlertController(title: "Desmarcar agendamento", message: "Escolha o motivo. Uma mensagem será enviada ao cliente no WhatsApp.", preferredStyle: .actionSheet)
+        for motivo in motivos {
+            alert.addAction(UIAlertAction(title: motivo, style: .default) { [weak self] _ in
+                if motivo == "Outro" {
+                    self?.pedirMotivoOutro(appt: appt, at: ip)
+                } else {
+                    self?.confirmarDesmarcar(appt, motivo: motivo, at: ip)
+                }
+            })
+        }
+        alert.addAction(UIAlertAction(title: "Cancelar", style: .cancel))
+        if let popover = alert.popoverPresentationController, let cell = tableView.cellForRow(at: ip) {
+            popover.sourceView = cell
+            popover.sourceRect = cell.bounds
+        }
+        present(alert, animated: true)
+    }
+
+    private func pedirMotivoOutro(appt: Appointment, at ip: IndexPath) {
+        let alert = UIAlertController(title: "Motivo do cancelamento", message: "Digite o motivo para enviar ao cliente.", preferredStyle: .alert)
+        alert.addTextField { $0.placeholder = "Ex: Horário indisponível" }
+        alert.addAction(UIAlertAction(title: "Desmarcar", style: .destructive) { [weak self] _ in
+            let motivo = alert.textFields?.first?.text?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+                ? (alert.textFields?.first?.text ?? "Outro")
+                : "Motivo não informado"
+            self?.confirmarDesmarcar(appt, motivo: motivo, at: ip)
+        })
+        alert.addAction(UIAlertAction(title: "Cancelar", style: .cancel))
+        present(alert, animated: true)
+    }
+
+    private func confirmarDesmarcar(_ appt: Appointment, motivo: String, at ip: IndexPath) {
+        let msg = "Seu agendamento foi desmarcado. Motivo: \(motivo). Qualquer dúvida, entre em contato."
+        ApiService.shared.updateAppointmentStatus(id: appt.id, status: "cancelled") { [weak self] _ in
+            ApiService.shared.sendWhatsAppMessage(phone: appt.customerPhone, message: msg) { _ in }
+            DispatchQueue.main.async {
+                self?.loadAppointments()
+            }
+        }
+    }
+
+    private func marcarConcluido(_ appt: Appointment, at ip: IndexPath) {
+        ApiService.shared.updateAppointmentStatus(id: appt.id, status: "completed") { [weak self] _ in
+            DispatchQueue.main.async {
+                self?.loadAppointments()
+            }
+        }
+    }
 }
 
 extension AppointmentsViewController: UITableViewDataSource, UITableViewDelegate {
@@ -140,6 +192,18 @@ extension AppointmentsViewController: UITableViewDataSource, UITableViewDelegate
         let appt = appointments[ip.row]
         var actions: [UIContextualAction] = []
 
+        // Concluído (ícone checkmark) — para pendente, confirmado ou em andamento
+        if appt.status == .pending || appt.status == .confirmed || appt.status == .inProgress {
+            let done = UIContextualAction(style: .normal, title: nil) { [weak self] _, _, done in
+                self?.marcarConcluido(appt, at: ip)
+                done(true)
+            }
+            done.backgroundColor = BarberTheme.success
+            done.image = UIImage(systemName: "checkmark.circle.fill")
+            actions.append(done)
+        }
+
+        // Confirmar (só para pendente)
         if appt.status == .pending {
             let confirm = UIContextualAction(style: .normal, title: "Confirmar") { [weak self] _, _, done in
                 self?.updateStatus(appt.id, status: "confirmed", at: ip)
@@ -149,12 +213,18 @@ extension AppointmentsViewController: UITableViewDataSource, UITableViewDelegate
             actions.append(confirm)
         }
 
-        let cancel = UIContextualAction(style: .destructive, title: "Cancelar") { [weak self] _, _, done in
-            self?.updateStatus(appt.id, status: "cancelled", at: ip)
-            done(true)
+        // Desmarcar (lixo) — cancela e avisa no WhatsApp
+        if appt.status == .pending || appt.status == .confirmed {
+            let cancel = UIContextualAction(style: .destructive, title: nil) { [weak self] _, _, done in
+                self?.desmarcarAgendamento(appt, at: ip)
+                done(true)
+            }
+            cancel.backgroundColor = BarberTheme.danger
+            cancel.image = UIImage(systemName: "trash.fill")
+            actions.append(cancel)
         }
-        actions.append(cancel)
-        return UISwipeActionsConfiguration(actions: actions)
+
+        return UISwipeActionsConfiguration(actions: actions.reversed())
     }
 }
 
@@ -168,6 +238,7 @@ class AppointmentRowCell: UITableViewCell {
     private let detailLabel = UILabel()
     private let statusBadge = UIView()
     private let statusLabel = UILabel()
+    private let completedIcon = UIImageView()
 
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
@@ -197,6 +268,12 @@ class AppointmentRowCell: UITableViewCell {
         statusLabel.font = .systemFont(ofSize: 11, weight: .semibold)
         statusBadge.addSubview(statusLabel)
 
+        completedIcon.image = UIImage(systemName: "checkmark.circle.fill")
+        completedIcon.tintColor = BarberTheme.success
+        completedIcon.contentMode = .scaleAspectFit
+        completedIcon.isHidden = true
+        card.addSubview(completedIcon)
+
         [timeLabel, nameLabel, detailLabel, statusBadge].forEach {
             card.addSubview($0)
             $0.translatesAutoresizingMaskIntoConstraints = false
@@ -204,6 +281,7 @@ class AppointmentRowCell: UITableViewCell {
         colorStripe.translatesAutoresizingMaskIntoConstraints = false
         card.translatesAutoresizingMaskIntoConstraints = false
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
+        completedIcon.translatesAutoresizingMaskIntoConstraints = false
 
         NSLayoutConstraint.activate([
             card.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 5),
@@ -229,6 +307,11 @@ class AppointmentRowCell: UITableViewCell {
             statusBadge.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -12),
             statusBadge.centerYAnchor.constraint(equalTo: card.centerYAnchor),
             statusBadge.heightAnchor.constraint(equalToConstant: 24),
+
+            completedIcon.trailingAnchor.constraint(equalTo: statusBadge.leadingAnchor, constant: -8),
+            completedIcon.centerYAnchor.constraint(equalTo: card.centerYAnchor),
+            completedIcon.widthAnchor.constraint(equalToConstant: 24),
+            completedIcon.heightAnchor.constraint(equalToConstant: 24),
 
             statusLabel.centerXAnchor.constraint(equalTo: statusBadge.centerXAnchor),
             statusLabel.centerYAnchor.constraint(equalTo: statusBadge.centerYAnchor),
@@ -256,5 +339,7 @@ class AppointmentRowCell: UITableViewCell {
         statusBadge.backgroundColor = color.withAlphaComponent(0.15)
         statusBadge.layer.borderWidth = 1
         statusBadge.layer.borderColor = color.withAlphaComponent(0.3).cgColor
+
+        completedIcon.isHidden = appt.status != .completed
     }
 }
