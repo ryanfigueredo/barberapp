@@ -40,7 +40,7 @@ class NewAppointmentViewController: UIViewController {
         title = "Novo Agendamento"
         view.backgroundColor = BarberTheme.bg
         navigationItem.leftBarButtonItem  = UIBarButtonItem(title: "Cancelar", style: .plain, target: self, action: #selector(cancel))
-        navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Salvar",   style: .done,  target: self, action: #selector(save))
+        navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Salvar",   style: .plain, target: self, action: #selector(save))
         navigationItem.leftBarButtonItem?.tintColor  = BarberTheme.textSecond
         navigationItem.rightBarButtonItem?.tintColor = BarberTheme.gold
         setupForm()
@@ -201,17 +201,37 @@ class NewAppointmentViewController: UIViewController {
         let alert = UIAlertController(title: "Escolher Horário", message: nil, preferredStyle: .actionSheet)
         let timeFmt = DateFormatter()
         timeFmt.dateFormat = "HH:mm"
+        timeFmt.locale = Locale(identifier: "pt_BR")
         let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         slots.forEach { slot in
-            let start = iso.date(from: slot.startTime).map { timeFmt.string(from: $0) } ?? slot.startTime
-            let end   = iso.date(from: slot.endTime).map { timeFmt.string(from: $0) } ?? slot.endTime
-            alert.addAction(UIAlertAction(title: "\(start) – \(end)", style: .default) { [weak self] _ in
+            let start = formatSlotTime(slot.startTime, formatter: timeFmt, iso: iso)
+            let end   = formatSlotTime(slot.endTime, formatter: timeFmt, iso: iso)
+            let title = "\(start) – \(end)"
+            alert.addAction(UIAlertAction(title: title, style: .default) { [weak self] _ in
                 self?.selectedSlotId = slot.id
-                self?.slotPicker.setValue("\(start) – \(end)")
+                self?.slotPicker.setValue(title)
             })
         }
         alert.addAction(UIAlertAction(title: "Cancelar", style: .cancel))
         present(alert, animated: true)
+    }
+
+    private func formatSlotTime(_ isoString: String, formatter: DateFormatter, iso: ISO8601DateFormatter) -> String {
+        if let date = iso.date(from: isoString) {
+            return formatter.string(from: date)
+        }
+        iso.formatOptions = [.withInternetDateTime]
+        if let date = iso.date(from: isoString) {
+            return formatter.string(from: date)
+        }
+        if let range = isoString.range(of: "T"),
+           let endRange = isoString.range(of: ":", range: range.upperBound..<isoString.endIndex) {
+            let prefix = String(isoString[range.upperBound..<endRange.upperBound])
+            let suffix = isoString[endRange.upperBound...].prefix(2)
+            return "\(prefix):\(suffix)"
+        }
+        return isoString
     }
 
     // MARK: - Save

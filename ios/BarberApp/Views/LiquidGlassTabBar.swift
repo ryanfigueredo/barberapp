@@ -62,6 +62,7 @@ final class LiquidGlassTabBar: UIView {
         overlayView.backgroundColor    = UIColor(white: 0.05, alpha: 0.60)
         overlayView.layer.cornerRadius = BarberTheme.tabBarRadius
         overlayView.layer.cornerCurve  = .continuous
+        overlayView.isUserInteractionEnabled = false
         blurView.contentView.addSubview(overlayView)
         overlayView.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
@@ -85,6 +86,7 @@ final class LiquidGlassTabBar: UIView {
         indicatorView.layer.cornerCurve  = .continuous
         indicatorView.layer.borderWidth  = 1
         indicatorView.layer.borderColor  = BarberTheme.gold.withAlphaComponent(0.40).cgColor
+        indicatorView.isUserInteractionEnabled = false
         blurView.contentView.addSubview(indicatorView)
 
         // Buttons stack
@@ -126,7 +128,7 @@ final class LiquidGlassTabBar: UIView {
         if old < buttons.count { buttons[old].setState(.normal, animated: true) }
         if new < buttons.count { buttons[new].setState(.selected, animated: true) }
         placeIndicator(at: new, animated: true)
-        UIImpactFeedbackGenerator(style: .soft).impactOccurred(intensity: 0.5)
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
     private func placeIndicator(at index: Int, animated: Bool) {
@@ -151,8 +153,8 @@ final class LiquidGlassTabBar: UIView {
     }
 }
 
-// MARK: - TabBarButton (sem constraints conflitantes no label)
-private final class TabBarButton: UIView {
+// MARK: - TabBarButton (UIButton para toque confiável)
+private final class TabBarButton: UIControl {
     enum State { case normal, selected }
     var onTap: ((Int) -> Void)?
     private let index: Int
@@ -200,7 +202,7 @@ private final class TabBarButton: UIView {
             titleLabel.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, multiplier: 0.9),
         ])
 
-        addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(tapped)))
+        addTarget(self, action: #selector(tapped), for: .touchUpInside)
     }
     required init?(coder: NSCoder) { fatalError() }
 

@@ -11,6 +11,10 @@ struct ApiService {
 
     private init() {}
 
+    private static func parseErrorString(from data: Data) -> String? {
+        (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String
+    }
+
     // MARK: - Generic fetch (callback) para uso em Calendar, Appointments, etc.
     func fetch<T: Decodable>(_ path: String, completion: @escaping (Result<T, Error>) -> Void) {
         guard let url = URL(string: baseURL + path) else {
@@ -34,8 +38,8 @@ struct ApiService {
                 return
             }
             guard (200...299).contains(http.statusCode), let data = data else {
-                if let data = data, let err = try? JSONDecoder().decode(ErrorResponse.self, from: data) {
-                    DispatchQueue.main.async { completion(.failure(ApiError.server(err.error))) }
+                if let data = data, let msg = Self.parseErrorString(from: data) {
+                    DispatchQueue.main.async { completion(.failure(ApiError.server(msg))) }
                 } else {
                     DispatchQueue.main.async { completion(.failure(ApiError.status(http.statusCode))) }
                 }
@@ -79,8 +83,8 @@ struct ApiService {
                 return
             }
             guard (200...299).contains(http.statusCode) else {
-                if let data = data, let errResp = try? JSONDecoder().decode(ErrorResponse.self, from: data) {
-                    DispatchQueue.main.async { completion(.failure(ApiError.server(errResp.error))) }
+                if let data = data, let msg = Self.parseErrorString(from: data) {
+                    DispatchQueue.main.async { completion(.failure(ApiError.server(msg))) }
                 } else {
                     DispatchQueue.main.async { completion(.failure(ApiError.status(http.statusCode))) }
                 }
@@ -167,8 +171,8 @@ struct ApiService {
         let (data, res) = try await URLSession.shared.data(for: req)
         guard let http = res as? HTTPURLResponse else { throw ApiError.noResponse }
         guard (200...299).contains(http.statusCode) else {
-            if let err = try? JSONDecoder().decode(ErrorResponse.self, from: data) {
-                throw ApiError.server(err.error)
+            if let msg = Self.parseErrorString(from: data) {
+                throw ApiError.server(msg)
             }
             throw ApiError.status(http.statusCode)
         }
@@ -189,8 +193,8 @@ struct ApiService {
         let (data, res) = try await URLSession.shared.data(for: req)
         guard let http = res as? HTTPURLResponse else { throw ApiError.noResponse }
         guard (200...299).contains(http.statusCode) else {
-            if let err = try? JSONDecoder().decode(ErrorResponse.self, from: data) {
-                throw ApiError.server(err.error)
+            if let msg = Self.parseErrorString(from: data) {
+                throw ApiError.server(msg)
             }
             throw ApiError.status(http.statusCode)
         }
@@ -243,7 +247,6 @@ struct ApiService {
     }
 }
 
-struct ErrorResponse: Decodable { let error: String }
 
 struct AppointmentsResponse: Decodable {
     let appointments: [Appointment]
@@ -320,6 +323,30 @@ struct Slot: Decodable {
         case startTime = "start_time"
         case endTime = "end_time"
     }
+}
+
+struct DashboardStats: Decodable {
+    let today: Int
+    let week: Int
+    let barbers: Int
+    let revenue_today: Double?
+    let revenue_week: Double?
+    let upcoming_today: [UpcomingAppointmentItem]
+}
+
+struct UpcomingAppointmentItem: Decodable {
+    let id: String
+    let customer_name: String
+    let appointment_date: String
+    let status: String
+    let barber: BarberInfo
+    let service: ServiceInfoShort?
+}
+
+struct ServiceInfoShort: Decodable {
+    let id: String
+    let name: String
+    let price: Double?
 }
 
 enum ApiError: Error {

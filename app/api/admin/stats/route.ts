@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
   endOfWeek.setDate(startOfWeek.getDate() + 6);
   endOfWeek.setHours(23, 59, 59, 999);
 
-  const [todayCount, weekCount, upcomingToday, barberCount] = await Promise.all([
+  const [todayCount, weekCount, upcomingToday, barberCount, completedToday, completedWeek] = await Promise.all([
     prisma.appointment.count({
       where: {
         tenant_id: tenant.id,
@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
       },
       include: {
         barber: { select: { id: true, name: true } },
-        service: { select: { id: true, name: true } },
+        service: { select: { id: true, name: true, price: true } },
       },
       orderBy: { appointment_date: 'asc' },
       take: 10,
@@ -59,12 +59,35 @@ export async function GET(request: NextRequest) {
     prisma.barber.count({
       where: { tenant_id: tenant.id, active: true, ...(auth.barberId ? { id: auth.barberId } : {}) },
     }),
+    prisma.appointment.findMany({
+      where: {
+        tenant_id: tenant.id,
+        ...barberFilter,
+        appointment_date: { gte: startOfToday, lte: endOfToday },
+        status: 'completed',
+      },
+      include: { service: { select: { price: true } } },
+    }),
+    prisma.appointment.findMany({
+      where: {
+        tenant_id: tenant.id,
+        ...barberFilter,
+        appointment_date: { gte: startOfWeek, lte: endOfWeek },
+        status: 'completed',
+      },
+      include: { service: { select: { price: true } } },
+    }),
   ]);
+
+  const revenue_today = completedToday.reduce((s, a) => s + (Number(a.service?.price) || 0), 0);
+  const revenue_week = completedWeek.reduce((s, a) => s + (Number(a.service?.price) || 0), 0);
 
   return NextResponse.json({
     today: todayCount,
     week: weekCount,
     barbers: barberCount,
+    revenue_today,
+    revenue_week,
     upcoming_today: upcomingToday.map((a) => ({
       id: a.id,
       customer_name: a.customer_name,

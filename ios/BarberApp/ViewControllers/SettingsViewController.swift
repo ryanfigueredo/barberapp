@@ -149,7 +149,7 @@ class SettingsViewController: UIViewController {
 
     @objc private func logout() {
         let alert = UIAlertController(title: "Sair", message: "Deseja sair da conta?", preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "Sair", style: .destructive) { [weak self] _ in
+        alert.addAction(UIAlertAction(title: "Sair", style: .destructive) { _ in
             AuthService.shared.logout()
             guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
                   let window = windowScene.windows.first else { return }

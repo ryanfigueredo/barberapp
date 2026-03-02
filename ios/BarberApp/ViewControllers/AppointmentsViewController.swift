@@ -52,7 +52,8 @@ class AppointmentsViewController: UIViewController {
             segmentControl.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
         ])
         tableView.tableHeaderView = container
-        container.frame = CGRect(x: 0, y: 0, width: UIScreen.main.bounds.width, height: 52)
+        let w = view.bounds.width > 0 ? view.bounds.width : 390
+        container.frame = CGRect(x: 0, y: 0, width: w, height: 52)
     }
 
     private func setupTableView() {
