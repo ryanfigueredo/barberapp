@@ -70,7 +70,18 @@ export async function getAuthFromRequest(request: NextRequest): Promise<AuthCont
       where: { api_key: apiKey, plan_active: true },
       select: { id: true, slug: true, name: true },
     });
-    if (tenant) return { ...defaultAuth, tenant, role: 'api' };
+    if (tenant) {
+      const barberIdHeader = request.headers.get('x-barber-id');
+      if (barberIdHeader) {
+        const barber = await prisma.barber.findFirst({
+          where: { id: barberIdHeader, tenant_id: tenant.id },
+        });
+        if (barber) {
+          return { ...defaultAuth, tenant, barberId: barber.id, role: 'barber' };
+        }
+      }
+      return { ...defaultAuth, tenant, role: 'admin' };
+    }
   }
 
   const tenantId = request.headers.get('x-tenant-id');

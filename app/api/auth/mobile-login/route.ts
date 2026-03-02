@@ -1,7 +1,7 @@
 /**
- * Mobile login — Basic Auth com api_key do tenant
- * Header: Authorization: Basic base64(api_key:password)
- * Ou: X-API-Key + X-Password (para facilitar)
+ * Login mobile (app iOS) — email/usuário + senha
+ * Retorna api_key do tenant + user (barber_id, role) para o app enviar nas requisições.
+ * Cada barbeiro entra com seu login; admin vê tudo, barber vê só o seu.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -10,57 +10,48 @@ import { prisma } from '@/lib/prisma';
 
 export async function POST(request: NextRequest) {
   try {
-    let apiKey: string | null = null;
-    let password: string | null = null;
-
-    const authHeader = request.headers.get('authorization');
-    if (authHeader?.startsWith('Basic ')) {
-      const base64 = authHeader.slice(6);
-      const decoded = Buffer.from(base64, 'base64').toString('utf-8');
-      [apiKey, password] = decoded.split(':');
-    } else {
-      apiKey = request.headers.get('x-api-key');
-      password = request.headers.get('x-password');
-    }
-
     const body = await request.json().catch(() => ({}));
-    apiKey = apiKey || body.api_key;
-    password = password || body.password;
+    const username = (body.username ?? body.email ?? '').toString().trim();
+    const password = body.password;
 
-    if (!apiKey || !password) {
+    if (!username || !password) {
       return NextResponse.json(
-        { error: 'API Key e senha obrigatórios (header ou body)' },
+        { error: 'Usuário/email e senha obrigatórios' },
         { status: 400 }
       );
     }
 
-    const tenant = await prisma.tenant.findUnique({
-      where: { api_key: apiKey, plan_active: true },
-      include: { users: true },
+    const user = await prisma.user.findUnique({
+      where: { username },
+      include: { tenant: true, barber: true },
     });
 
-    if (!tenant) {
-      return NextResponse.json({ error: 'API Key inválida' }, { status: 401 });
+    if (!user || !user.tenant_id) {
+      return NextResponse.json({ error: 'Credenciais inválidas' }, { status: 401 });
     }
 
-    const user = tenant.users.find((u) => bcrypt.compareSync(password!, u.password));
-    if (!user) {
-      return NextResponse.json({ error: 'Senha inválida' }, { status: 401 });
+    const valid = await bcrypt.compare(password, user.password);
+    if (!valid) {
+      return NextResponse.json({ error: 'Credenciais inválidas' }, { status: 401 });
     }
+
+    const tenant = user.tenant!;
 
     return NextResponse.json({
       success: true,
-      token: tenant.api_key,
+      api_key: tenant.api_key,
       tenant: {
         id: tenant.id,
         name: tenant.name,
         slug: tenant.slug,
-        business_name: tenant.business_name,
       },
       user: {
         id: user.id,
+        username: user.username,
         name: user.name,
         role: user.role,
+        barber_id: user.barber_id ?? null,
+        barber: user.barber ? { id: user.barber.id, name: user.barber.name } : null,
       },
     });
   } catch (error) {

@@ -2,7 +2,8 @@
 //  LoginViewController.swift
 //  BarberApp
 //
-//  Tela de login: Base URL + API Key → salva em AuthService e apresenta MainTab
+//  Login por usuário/email + senha. A API key fica vinculada ao login (retornada pelo backend).
+//  Admin vê tudo da barbearia; barbeiro vê só os próprios dados.
 //
 
 import UIKit
@@ -12,9 +13,11 @@ class LoginViewController: UIViewController {
     private let scrollView = UIScrollView()
     private let contentStack = UIStackView()
     private let titleLabel = UILabel()
-    private let baseURLField = UITextField()
-    private let apiKeyField = UITextField()
+    private let subtitleLabel = UILabel()
+    private let usernameField = UITextField()
+    private let passwordField = UITextField()
     private let loginButton = UIButton(type: .system)
+    private let loadingIndicator = UIActivityIndicatorView(style: .medium)
     private let glassCard = UIView()
 
     override func viewDidLoad() {
@@ -39,6 +42,12 @@ class LoginViewController: UIViewController {
         titleLabel.textAlignment = .center
         contentStack.addArrangedSubview(titleLabel)
 
+        subtitleLabel.text = "Entre com seu usuário da barbearia"
+        subtitleLabel.font = .systemFont(ofSize: 15)
+        subtitleLabel.textColor = BarberAppTheme.textTertiary
+        subtitleLabel.textAlignment = .center
+        contentStack.addArrangedSubview(subtitleLabel)
+
         glassCard.backgroundColor = BarberAppTheme.card
         glassCard.layer.cornerRadius = 16
         glassCard.layer.borderWidth = 1
@@ -49,18 +58,17 @@ class LoginViewController: UIViewController {
         cardStack.isLayoutMarginsRelativeArrangement = true
         cardStack.layoutMargins = UIEdgeInsets(top: 24, left: 20, bottom: 24, right: 20)
 
-        baseURLField.placeholder = "Base URL (ex: http://localhost:3000)"
-        styleField(baseURLField)
-        baseURLField.text = AuthService.shared.baseURL
-        baseURLField.keyboardType = .URL
-        baseURLField.autocapitalizationType = .none
-        cardStack.addArrangedSubview(baseURLField)
+        usernameField.placeholder = "Usuário ou e-mail"
+        styleField(usernameField)
+        usernameField.keyboardType = .emailAddress
+        usernameField.autocapitalizationType = .none
+        usernameField.autocorrectionType = .no
+        cardStack.addArrangedSubview(usernameField)
 
-        apiKeyField.placeholder = "API Key"
-        styleField(apiKeyField)
-        apiKeyField.text = AuthService.shared.apiKey
-        apiKeyField.isSecureTextEntry = true
-        cardStack.addArrangedSubview(apiKeyField)
+        passwordField.placeholder = "Senha"
+        styleField(passwordField)
+        passwordField.isSecureTextEntry = true
+        cardStack.addArrangedSubview(passwordField)
 
         loginButton.setTitle("Entrar", for: .normal)
         loginButton.titleLabel?.font = .systemFont(ofSize: 17, weight: .semibold)
@@ -69,6 +77,10 @@ class LoginViewController: UIViewController {
         loginButton.layer.cornerRadius = 12
         loginButton.addTarget(self, action: #selector(doLogin), for: .touchUpInside)
         cardStack.addArrangedSubview(loginButton)
+
+        loadingIndicator.color = BarberAppTheme.background
+        loadingIndicator.hidesWhenStopped = true
+        cardStack.addArrangedSubview(loadingIndicator)
 
         glassCard.addSubview(cardStack)
         cardStack.translatesAutoresizingMaskIntoConstraints = false
@@ -111,22 +123,70 @@ class LoginViewController: UIViewController {
     }
 
     @objc private func doLogin() {
-        let base = baseURLField.text?.trimmingCharacters(in: .whitespaces) ?? ""
-        let key = apiKeyField.text?.trimmingCharacters(in: .whitespaces) ?? ""
+        let username = usernameField.text?.trimmingCharacters(in: .whitespaces) ?? ""
+        let password = passwordField.text ?? ""
 
-        guard !key.isEmpty else {
-            let alert = UIAlertController(title: "API Key", message: "Informe a API Key.", preferredStyle: .alert)
+        guard !username.isEmpty else {
+            let alert = UIAlertController(title: "Usuário", message: "Informe seu usuário ou e-mail.", preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "OK", style: .default))
+            present(alert, animated: true)
+            return
+        }
+        guard !password.isEmpty else {
+            let alert = UIAlertController(title: "Senha", message: "Informe sua senha.", preferredStyle: .alert)
             alert.addAction(UIAlertAction(title: "OK", style: .default))
             present(alert, animated: true)
             return
         }
 
-        AuthService.shared.baseURL = base.isEmpty ? "http://localhost:3000" : base
-        AuthService.shared.apiKey = key
+        loginButton.isEnabled = false
+        loadingIndicator.startAnimating()
 
-        guard let window = view.window else { return }
-        let main = MainTabViewController()
-        window.rootViewController = main
-        window.makeKeyAndVisible()
+        Task {
+            do {
+                let baseURL = AuthService.shared.baseURL
+                let response = try await ApiService.shared.login(username: username, password: password)
+
+                await MainActor.run {
+                    self.loginButton.isEnabled = true
+                    self.loadingIndicator.stopAnimating()
+
+                    AuthService.shared.baseURL = baseURL
+                    AuthService.shared.apiKey = response.api_key
+                    AuthService.shared.role = response.user?.role ?? "admin"
+                    AuthService.shared.barberId = response.user?.barber_id
+                    AuthService.shared.userName = response.user?.name
+                    AuthService.shared.tenantName = response.tenant?.name
+
+                    guard let window = self.view.window else { return }
+                    let main = MainTabViewController()
+                    window.rootViewController = main
+                    window.makeKeyAndVisible()
+                }
+            } catch let err as ApiError {
+                await MainActor.run {
+                    self.loginButton.isEnabled = true
+                    self.loadingIndicator.stopAnimating()
+                    let message: String
+                    switch err {
+                    case .server(let msg): message = msg
+                    case .status(let code): message = "Erro \(code)"
+                    case .invalidURL: message = "URL inválida"
+                    case .noResponse: message = "Sem resposta do servidor"
+                    }
+                    let alert = UIAlertController(title: "Erro ao entrar", message: message, preferredStyle: .alert)
+                    alert.addAction(UIAlertAction(title: "OK", style: .default))
+                    self.present(alert, animated: true)
+                }
+            } catch {
+                await MainActor.run {
+                    self.loginButton.isEnabled = true
+                    self.loadingIndicator.stopAnimating()
+                    let alert = UIAlertController(title: "Erro", message: error.localizedDescription, preferredStyle: .alert)
+                    alert.addAction(UIAlertAction(title: "OK", style: .default))
+                    self.present(alert, animated: true)
+                }
+            }
+        }
     }
 }

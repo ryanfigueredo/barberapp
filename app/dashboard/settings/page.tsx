@@ -17,6 +17,7 @@ interface Tenant {
 export default function SettingsPage() {
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [apiKey, setApiKey] = useState('');
+  const [showApiKey, setShowApiKey] = useState(false);
 
   useEffect(() => {
     const stored = localStorage.getItem('api_key');
@@ -36,6 +37,18 @@ export default function SettingsPage() {
     }
   };
 
+  const copyApiKey = async () => {
+    const key = apiKey.trim();
+    if (!key) return;
+    try {
+      await navigator.clipboard.writeText(key);
+      alert('API Key copiada!');
+    } catch {
+      // Fallback simples
+      window.prompt('Copie a API Key:', key);
+    }
+  };
+
   return (
     <div className="p-8">
       <h1 className="font-display text-3xl text-[#F5C518] mb-2">Configurações</h1>
@@ -47,14 +60,32 @@ export default function SettingsPage() {
           <p className="text-white/60 text-sm mb-4">
             Use a api_key do tenant para autenticar as requisições do dashboard.
           </p>
-          <div className="flex gap-4">
+          <div className="flex gap-3">
             <input
-              type="password"
+              type={showApiKey ? 'text' : 'password'}
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
               placeholder="Cole sua API Key aqui"
               className="flex-1 px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-[#F5C518]"
             />
+            <button
+              type="button"
+              onClick={() => setShowApiKey((v) => !v)}
+              className="px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white/80 hover:text-white hover:border-white/20 transition"
+              aria-label={showApiKey ? 'Ocultar API Key' : 'Mostrar API Key'}
+              title={showApiKey ? 'Ocultar' : 'Mostrar'}
+            >
+              {showApiKey ? '🙈' : '👁️'}
+            </button>
+            <button
+              type="button"
+              onClick={copyApiKey}
+              disabled={!apiKey.trim()}
+              className="px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white/80 hover:text-white hover:border-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition"
+              title="Copiar API Key"
+            >
+              Copiar
+            </button>
             <button
               onClick={saveApiKey}
               className="px-6 py-3 bg-[#F5C518] text-black font-semibold rounded-lg hover:bg-amber-400 transition"

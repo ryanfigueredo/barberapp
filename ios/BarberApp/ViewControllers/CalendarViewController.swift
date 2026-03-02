@@ -29,7 +29,7 @@ class CalendarViewController: UIViewController {
     var barbers: [BarberInfo] = []
     var selectedBarberId: String? = nil // nil = todos
     var daysWithAppointments: [String: [String]] = [:]
-    var baseURL: String = "http://localhost:3000"
+    var baseURL: String = AuthService.productionBaseURL
     var apiKey: String = ""
 
     // MARK: - UI

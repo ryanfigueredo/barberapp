@@ -11,11 +11,34 @@ struct ApiService {
 
     private init() {}
 
+    // MARK: - Login (sem auth — usa baseURL do AuthService)
+    func login(username: String, password: String) async throws -> MobileLoginResponse {
+        guard let url = URL(string: baseURL + "/api/auth/mobile-login") else { throw ApiError.invalidURL }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let body = ["username": username, "password": password]
+        req.httpBody = try JSONEncoder().encode(body)
+
+        let (data, res) = try await URLSession.shared.data(for: req)
+        guard let http = res as? HTTPURLResponse else { throw ApiError.noResponse }
+        guard (200...299).contains(http.statusCode) else {
+            if let err = try? JSONDecoder().decode(ErrorResponse.self, from: data) {
+                throw ApiError.server(err.error)
+            }
+            throw ApiError.status(http.statusCode)
+        }
+        return try JSONDecoder().decode(MobileLoginResponse.self, from: data)
+    }
+
     private func request<T: Decodable>(path: String, method: String = "GET", body: Data? = nil) async throws -> T {
         guard let url = URL(string: baseURL + path) else { throw ApiError.invalidURL }
         var req = URLRequest(url: url)
         req.httpMethod = method
         req.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
+        if let barberId = AuthService.shared.barberId {
+            req.setValue(barberId, forHTTPHeaderField: "X-Barber-Id")
+        }
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = body
 
@@ -77,6 +100,30 @@ struct ApiService {
 }
 
 struct ErrorResponse: Decodable { let error: String }
+
+struct MobileLoginResponse: Decodable {
+    let success: Bool
+    let api_key: String
+    let tenant: TenantInfo?
+    let user: UserInfo?
+    struct TenantInfo: Decodable {
+        let id: String
+        let name: String
+        let slug: String?
+    }
+    struct UserInfo: Decodable {
+        let id: String
+        let username: String?
+        let name: String
+        let role: String
+        let barber_id: String?
+        let barber: BarberRef?
+        struct BarberRef: Decodable {
+            let id: String
+            let name: String
+        }
+    }
+}
 
 struct MonthAppointmentsResponse: Decodable {
     let month: String
