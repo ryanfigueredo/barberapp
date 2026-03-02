@@ -14,6 +14,36 @@ final class MainTabViewController: UITabBarController {
         view.backgroundColor = BarberTheme.bg
         setupViewControllers()
         styleTabBar()
+        requestNotificationPermissionAndSchedule()
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appWillEnterForeground),
+            name: UIApplication.willEnterForegroundNotification,
+            object: nil
+        )
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self, name: UIApplication.willEnterForegroundNotification, object: nil)
+    }
+
+    @objc private func appWillEnterForeground() {
+        fetchUpcomingAndScheduleNotifications()
+    }
+
+    /// Pede permissão de notificações e agenda lembretes dos próximos agendamentos.
+    private func requestNotificationPermissionAndSchedule() {
+        AppointmentNotificationService.shared.requestPermission { [weak self] _ in
+            self?.fetchUpcomingAndScheduleNotifications()
+        }
+    }
+
+    private func fetchUpcomingAndScheduleNotifications() {
+        ApiService.shared.fetch("/api/app/appointments?upcoming=true") { [weak self] (result: Result<AppointmentsResponse, Error>) in
+            if case .success(let r) = result {
+                AppointmentNotificationService.shared.scheduleForAppointments(r.appointments)
+            }
+        }
     }
 
     override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }

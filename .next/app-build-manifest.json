@@ -29,12 +29,13 @@
       "static/chunks/main-app-b9f5e307cc390fcd.js",
       "static/chunks/app/page-83aba23901e55958.js"
     ],
-    "/dashboard/appointments/page": [
+    "/dashboard/page": [
       "static/chunks/webpack-c46cfb54042462fd.js",
       "static/chunks/fd9d1056-516b58327fb05db5.js",
       "static/chunks/938-f464a3b2301c5ba9.js",
       "static/chunks/main-app-b9f5e307cc390fcd.js",
-      "static/chunks/app/dashboard/appointments/page-5fc9c9ee7e17e40f.js"
+      "static/chunks/176-1816c74072f79c16.js",
+      "static/chunks/app/dashboard/page-002c7b044c99f21c.js"
     ],
     "/dashboard/layout": [
       "static/chunks/webpack-c46cfb54042462fd.js",
@@ -44,34 +45,19 @@
       "static/chunks/176-1816c74072f79c16.js",
       "static/chunks/app/dashboard/layout-4087032512cad9e7.js"
     ],
-    "/dashboard/slots/page": [
+    "/dashboard/calendar/page": [
       "static/chunks/webpack-c46cfb54042462fd.js",
       "static/chunks/fd9d1056-516b58327fb05db5.js",
       "static/chunks/938-f464a3b2301c5ba9.js",
       "static/chunks/main-app-b9f5e307cc390fcd.js",
-      "static/chunks/app/dashboard/slots/page-c9a639eff9046c4f.js"
+      "static/chunks/app/dashboard/calendar/page-363ac2eb67f020a5.js"
     ],
-    "/dashboard/barbers/page": [
+    "/dashboard/appointments/page": [
       "static/chunks/webpack-c46cfb54042462fd.js",
       "static/chunks/fd9d1056-516b58327fb05db5.js",
       "static/chunks/938-f464a3b2301c5ba9.js",
       "static/chunks/main-app-b9f5e307cc390fcd.js",
-      "static/chunks/app/dashboard/barbers/page-f8d038b2cdd47ecc.js"
-    ],
-    "/dashboard/whatsapp/page": [
-      "static/chunks/webpack-c46cfb54042462fd.js",
-      "static/chunks/fd9d1056-516b58327fb05db5.js",
-      "static/chunks/938-f464a3b2301c5ba9.js",
-      "static/chunks/main-app-b9f5e307cc390fcd.js",
-      "static/chunks/app/dashboard/whatsapp/page-2e052b1c01148628.js"
-    ],
-    "/dashboard/page": [
-      "static/chunks/webpack-c46cfb54042462fd.js",
-      "static/chunks/fd9d1056-516b58327fb05db5.js",
-      "static/chunks/938-f464a3b2301c5ba9.js",
-      "static/chunks/main-app-b9f5e307cc390fcd.js",
-      "static/chunks/176-1816c74072f79c16.js",
-      "static/chunks/app/dashboard/page-002c7b044c99f21c.js"
+      "static/chunks/app/dashboard/appointments/page-5fc9c9ee7e17e40f.js"
     ],
     "/dashboard/services/page": [
       "static/chunks/webpack-c46cfb54042462fd.js",
@@ -80,12 +66,12 @@
       "static/chunks/main-app-b9f5e307cc390fcd.js",
       "static/chunks/app/dashboard/services/page-9f9e4f6259894c20.js"
     ],
-    "/dashboard/calendar/page": [
+    "/dashboard/barbers/page": [
       "static/chunks/webpack-c46cfb54042462fd.js",
       "static/chunks/fd9d1056-516b58327fb05db5.js",
       "static/chunks/938-f464a3b2301c5ba9.js",
       "static/chunks/main-app-b9f5e307cc390fcd.js",
-      "static/chunks/app/dashboard/calendar/page-363ac2eb67f020a5.js"
+      "static/chunks/app/dashboard/barbers/page-f8d038b2cdd47ecc.js"
     ],
     "/dashboard/settings/page": [
       "static/chunks/webpack-c46cfb54042462fd.js",
@@ -93,6 +79,20 @@
       "static/chunks/938-f464a3b2301c5ba9.js",
       "static/chunks/main-app-b9f5e307cc390fcd.js",
       "static/chunks/app/dashboard/settings/page-970cbc0a275f2a4b.js"
+    ],
+    "/dashboard/slots/page": [
+      "static/chunks/webpack-c46cfb54042462fd.js",
+      "static/chunks/fd9d1056-516b58327fb05db5.js",
+      "static/chunks/938-f464a3b2301c5ba9.js",
+      "static/chunks/main-app-b9f5e307cc390fcd.js",
+      "static/chunks/app/dashboard/slots/page-c9a639eff9046c4f.js"
+    ],
+    "/dashboard/whatsapp/page": [
+      "static/chunks/webpack-c46cfb54042462fd.js",
+      "static/chunks/fd9d1056-516b58327fb05db5.js",
+      "static/chunks/938-f464a3b2301c5ba9.js",
+      "static/chunks/main-app-b9f5e307cc390fcd.js",
+      "static/chunks/app/dashboard/whatsapp/page-2e052b1c01148628.js"
     ]
   }
 }

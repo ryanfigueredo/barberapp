@@ -96,6 +96,7 @@ class AppointmentsViewController: UIViewController {
                 if case .success(let r) = result {
                     self?.appointments = r.appointments
                     self?.tableView.reloadData()
+                    AppointmentNotificationService.shared.scheduleForAppointments(r.appointments)
                 }
             }
         }
