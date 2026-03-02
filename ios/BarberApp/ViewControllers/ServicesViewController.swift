@@ -23,7 +23,7 @@ class ServicesViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = "Serviços"
-        view.backgroundColor = BarberAppTheme.background
+        view.backgroundColor = BarberTheme.bg
         navigationController?.navigationBar.prefersLargeTitles = true
         setupTableView()
         loadServices()
@@ -31,14 +31,14 @@ class ServicesViewController: UIViewController {
 
     private func setupTableView() {
         tableView.backgroundColor = .clear
-        tableView.separatorColor = BarberAppTheme.border
+        tableView.separatorColor = BarberTheme.border
         tableView.register(ServiceRowCell.self, forCellReuseIdentifier: "cell")
         tableView.delegate = self
         tableView.dataSource = self
         tableView.rowHeight = 72
         tableView.contentInset = UIEdgeInsets(top: 0, left: 0, bottom: 100, right: 0)
 
-        refreshControl.tintColor = BarberAppTheme.gold
+        refreshControl.tintColor = BarberTheme.gold
         refreshControl.addTarget(self, action: #selector(handleRefresh), for: .valueChanged)
         tableView.refreshControl = refreshControl
 
@@ -52,7 +52,7 @@ class ServicesViewController: UIViewController {
         ])
 
         emptyLabel.text = "Nenhum serviço cadastrado"
-        emptyLabel.textColor = BarberAppTheme.textTertiary
+        emptyLabel.textColor = BarberTheme.textMuted
         emptyLabel.font = .systemFont(ofSize: 16)
         emptyLabel.textAlignment = .center
         emptyLabel.isHidden = true
@@ -117,18 +117,18 @@ private final class ServiceRowCell: UITableViewCell {
         backgroundColor = .clear
         selectionStyle = .none
         let config = UIImage.SymbolConfiguration(pointSize: 22, weight: .medium)
-        iconView.image = UIImage(systemName: BarberDesign.TabIcon.services, withConfiguration: config)
-        iconView.tintColor = BarberAppTheme.gold
+        iconView.image = UIImage(systemName: "scissors", withConfiguration: config)
+        iconView.tintColor = BarberTheme.gold
         iconView.contentMode = .scaleAspectFit
         contentView.addSubview(iconView)
         nameLabel.font = .systemFont(ofSize: 16, weight: .medium)
-        nameLabel.textColor = BarberAppTheme.textPrimary
+        nameLabel.textColor = BarberTheme.textPrimary
         contentView.addSubview(nameLabel)
         detailLabel.font = .systemFont(ofSize: 13)
-        detailLabel.textColor = BarberAppTheme.textSecondary
+        detailLabel.textColor = BarberTheme.textSecond
         contentView.addSubview(detailLabel)
         priceLabel.font = .systemFont(ofSize: 15, weight: .semibold)
-        priceLabel.textColor = BarberAppTheme.gold
+        priceLabel.textColor = BarberTheme.gold
         contentView.addSubview(priceLabel)
         iconView.translatesAutoresizingMaskIntoConstraints = false
         nameLabel.translatesAutoresizingMaskIntoConstraints = false

@@ -17,7 +17,7 @@ class BarbersViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = "Barbeiros"
-        view.backgroundColor = BarberAppTheme.background
+        view.backgroundColor = BarberTheme.bg
         navigationController?.navigationBar.prefersLargeTitles = true
         setupTableView()
         loadBarbers()
@@ -25,14 +25,14 @@ class BarbersViewController: UIViewController {
 
     private func setupTableView() {
         tableView.backgroundColor = .clear
-        tableView.separatorColor = BarberAppTheme.border
+        tableView.separatorColor = BarberTheme.border
         tableView.register(BarberRowCell.self, forCellReuseIdentifier: "cell")
         tableView.delegate = self
         tableView.dataSource = self
         tableView.rowHeight = 72
         tableView.contentInset = UIEdgeInsets(top: 0, left: 0, bottom: 100, right: 0)
 
-        refreshControl.tintColor = BarberAppTheme.gold
+        refreshControl.tintColor = BarberTheme.gold
         refreshControl.addTarget(self, action: #selector(handleRefresh), for: .valueChanged)
         tableView.refreshControl = refreshControl
 
@@ -46,7 +46,7 @@ class BarbersViewController: UIViewController {
         ])
 
         emptyLabel.text = "Nenhum barbeiro cadastrado"
-        emptyLabel.textColor = BarberAppTheme.textTertiary
+        emptyLabel.textColor = BarberTheme.textMuted
         emptyLabel.font = .systemFont(ofSize: 16)
         emptyLabel.textAlignment = .center
         emptyLabel.isHidden = true
@@ -109,17 +109,17 @@ private final class BarberRowCell: UITableViewCell {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
         backgroundColor = .clear
         selectionStyle = .none
-        avatarView.backgroundColor = BarberAppTheme.card
+        avatarView.backgroundColor = BarberTheme.surface
         avatarView.layer.cornerRadius = 24
         avatarView.layer.borderWidth = 1
-        avatarView.layer.borderColor = BarberAppTheme.gold.withAlphaComponent(0.3).cgColor
+        avatarView.layer.borderColor = BarberTheme.gold.withAlphaComponent(0.3).cgColor
         contentView.addSubview(avatarView)
         avatarLabel.font = .systemFont(ofSize: 18, weight: .semibold)
-        avatarLabel.textColor = BarberAppTheme.gold
+        avatarLabel.textColor = BarberTheme.gold
         avatarLabel.textAlignment = .center
         avatarView.addSubview(avatarLabel)
         nameLabel.font = .systemFont(ofSize: 16, weight: .medium)
-        nameLabel.textColor = BarberAppTheme.textPrimary
+        nameLabel.textColor = BarberTheme.textPrimary
         contentView.addSubview(nameLabel)
         avatarView.translatesAutoresizingMaskIntoConstraints = false
         avatarLabel.translatesAutoresizingMaskIntoConstraints = false

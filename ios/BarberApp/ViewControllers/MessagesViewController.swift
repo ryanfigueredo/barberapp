@@ -17,7 +17,7 @@ class MessagesViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = "Mensagens"
-        view.backgroundColor = BarberAppTheme.background
+        view.backgroundColor = BarberTheme.bg
         navigationController?.navigationBar.prefersLargeTitles = true
         setupTableView()
         loadConversations()
@@ -29,14 +29,14 @@ class MessagesViewController: UIViewController {
 
     private func setupTableView() {
         tableView.backgroundColor = .clear
-        tableView.separatorColor = BarberAppTheme.border
+        tableView.separatorColor = BarberTheme.border
         tableView.register(ConversationCell.self, forCellReuseIdentifier: "cell")
         tableView.delegate = self
         tableView.dataSource = self
         tableView.rowHeight = 80
         tableView.contentInset = UIEdgeInsets(top: 0, left: 0, bottom: 100, right: 0)
 
-        refreshControl.tintColor = BarberAppTheme.gold
+        refreshControl.tintColor = BarberTheme.gold
         refreshControl.addTarget(self, action: #selector(handleRefresh), for: .valueChanged)
         tableView.refreshControl = refreshControl
 
@@ -50,7 +50,7 @@ class MessagesViewController: UIViewController {
         ])
 
         emptyLabel.text = "Nenhuma conversa ainda"
-        emptyLabel.textColor = BarberAppTheme.textTertiary
+        emptyLabel.textColor = BarberTheme.textMuted
         emptyLabel.font = .systemFont(ofSize: 16)
         emptyLabel.textAlignment = .center
         emptyLabel.isHidden = true
@@ -126,38 +126,38 @@ final class ConversationCell: UITableViewCell {
     required init?(coder: NSCoder) { fatalError() }
 
     private func setupUI() {
-        avatarView.backgroundColor = BarberAppTheme.card
+        avatarView.backgroundColor = BarberTheme.surface
         avatarView.layer.cornerRadius = 24
         avatarView.layer.borderWidth = 1.5
-        avatarView.layer.borderColor = BarberAppTheme.gold.withAlphaComponent(0.3).cgColor
+        avatarView.layer.borderColor = BarberTheme.gold.withAlphaComponent(0.3).cgColor
         contentView.addSubview(avatarView)
 
         avatarLabel.font = .systemFont(ofSize: 18, weight: .semibold)
-        avatarLabel.textColor = BarberAppTheme.gold
+        avatarLabel.textColor = BarberTheme.gold
         avatarLabel.textAlignment = .center
         avatarView.addSubview(avatarLabel)
 
-        waitingIndicator.backgroundColor = BarberDesign.success
+        waitingIndicator.backgroundColor = BarberTheme.success
         waitingIndicator.layer.cornerRadius = 6
         waitingIndicator.layer.borderWidth = 2
-        waitingIndicator.layer.borderColor = BarberAppTheme.background.cgColor
+        waitingIndicator.layer.borderColor = BarberTheme.bg.cgColor
         waitingIndicator.isHidden = true
         contentView.addSubview(waitingIndicator)
 
         nameLabel.font = .systemFont(ofSize: 15, weight: .semibold)
-        nameLabel.textColor = BarberAppTheme.textPrimary
+        nameLabel.textColor = BarberTheme.textPrimary
         contentView.addSubview(nameLabel)
 
         previewLabel.font = .systemFont(ofSize: 13)
-        previewLabel.textColor = BarberAppTheme.textSecondary
+        previewLabel.textColor = BarberTheme.textSecond
         previewLabel.numberOfLines = 1
         contentView.addSubview(previewLabel)
 
         timeLabel.font = .systemFont(ofSize: 11)
-        timeLabel.textColor = BarberAppTheme.textTertiary
+        timeLabel.textColor = BarberTheme.textMuted
         contentView.addSubview(timeLabel)
 
-        unreadBadge.backgroundColor = BarberAppTheme.gold
+        unreadBadge.backgroundColor = BarberTheme.gold
         unreadBadge.layer.cornerRadius = 10
         unreadBadge.isHidden = true
         contentView.addSubview(unreadBadge)

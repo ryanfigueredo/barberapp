@@ -22,7 +22,7 @@ class LoginViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = BarberAppTheme.background
+        view.backgroundColor = BarberTheme.bg
         setupUI()
     }
 
@@ -38,20 +38,20 @@ class LoginViewController: UIViewController {
 
         titleLabel.text = "BarberApp"
         titleLabel.font = .systemFont(ofSize: 28, weight: .bold)
-        titleLabel.textColor = BarberAppTheme.gold
+        titleLabel.textColor = BarberTheme.gold
         titleLabel.textAlignment = .center
         contentStack.addArrangedSubview(titleLabel)
 
         subtitleLabel.text = "Entre com seu usuário da barbearia"
         subtitleLabel.font = .systemFont(ofSize: 15)
-        subtitleLabel.textColor = BarberAppTheme.textTertiary
+        subtitleLabel.textColor = BarberTheme.textMuted
         subtitleLabel.textAlignment = .center
         contentStack.addArrangedSubview(subtitleLabel)
 
-        glassCard.backgroundColor = BarberAppTheme.card
+        glassCard.backgroundColor = BarberTheme.surface
         glassCard.layer.cornerRadius = 16
         glassCard.layer.borderWidth = 1
-        glassCard.layer.borderColor = BarberAppTheme.gold.withAlphaComponent(0.25).cgColor
+        glassCard.layer.borderColor = BarberTheme.gold.withAlphaComponent(0.25).cgColor
         let cardStack = UIStackView()
         cardStack.axis = .vertical
         cardStack.spacing = 16
@@ -72,13 +72,13 @@ class LoginViewController: UIViewController {
 
         loginButton.setTitle("Entrar", for: .normal)
         loginButton.titleLabel?.font = .systemFont(ofSize: 17, weight: .semibold)
-        loginButton.setTitleColor(BarberAppTheme.background, for: .normal)
-        loginButton.backgroundColor = BarberAppTheme.gold
+        loginButton.setTitleColor(BarberTheme.bg, for: .normal)
+        loginButton.backgroundColor = BarberTheme.gold
         loginButton.layer.cornerRadius = 12
         loginButton.addTarget(self, action: #selector(doLogin), for: .touchUpInside)
         cardStack.addArrangedSubview(loginButton)
 
-        loadingIndicator.color = BarberAppTheme.background
+        loadingIndicator.color = BarberTheme.bg
         loadingIndicator.hidesWhenStopped = true
         cardStack.addArrangedSubview(loadingIndicator)
 
@@ -109,7 +109,7 @@ class LoginViewController: UIViewController {
     private func styleField(_ field: UITextField) {
         field.backgroundColor = UIColor(white: 0.12, alpha: 1)
         field.textColor = .white
-        field.tintColor = BarberAppTheme.gold
+        field.tintColor = BarberTheme.gold
         field.layer.cornerRadius = 10
         field.leftView = UIView(frame: CGRect(x: 0, y: 0, width: 12, height: 20))
         field.leftViewMode = .always
@@ -118,7 +118,7 @@ class LoginViewController: UIViewController {
         field.heightAnchor.constraint(equalToConstant: 48).isActive = true
         field.attributedPlaceholder = NSAttributedString(
             string: field.placeholder ?? "",
-            attributes: [.foregroundColor: BarberAppTheme.textTertiary as Any]
+            attributes: [.foregroundColor: BarberTheme.textMuted as Any]
         )
     }
 

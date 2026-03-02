@@ -2,8 +2,7 @@
 //  MainTabViewController.swift
 //  BarberApp
 //
-//  Tab principal: Calendário | Agendamentos | Barbeiros | Serviços | Mensagens
-//  Liquid Glass tab bar + nav bar dark luxury
+//  Tab principal + botão Configurações na nav bar
 //
 
 import UIKit
@@ -17,54 +16,62 @@ class MainTabViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = BarberAppTheme.background
+        view.backgroundColor = BarberTheme.bg
         setupViewControllers()
         setupTabBar()
         showViewController(at: 0)
     }
 
     private func setupViewControllers() {
-        let cal = CalendarViewController()
-        cal.baseURL = AuthService.shared.baseURL
-        cal.apiKey = AuthService.shared.apiKey
-
         viewControllers = [
-            UINavigationController(rootViewController: cal),
-            UINavigationController(rootViewController: AppointmentsViewController()),
-            UINavigationController(rootViewController: BarbersViewController()),
-            UINavigationController(rootViewController: ServicesViewController()),
-            UINavigationController(rootViewController: MessagesViewController()),
+            wrapInNav(CalendarViewController(), title: "Calendário"),
+            wrapInNav(AppointmentsViewController(), title: "Agendamentos"),
+            wrapInNav(BarbersViewController(), title: "Barbeiros"),
+            wrapInNav(ServicesViewController(), title: "Serviços"),
+            wrapInNav(MessagesViewController(), title: "Mensagens"),
         ]
+    }
 
-        viewControllers.forEach { vc in
-            guard let nav = vc as? UINavigationController else { return }
-            let appearance = UINavigationBarAppearance()
-            appearance.configureWithTransparentBackground()
-            appearance.backgroundColor = BarberAppTheme.card
-            appearance.titleTextAttributes = [
-                .foregroundColor: BarberAppTheme.gold,
-                .font: UIFont.systemFont(ofSize: 18, weight: .bold),
-            ]
-            appearance.largeTitleTextAttributes = [
-                .foregroundColor: BarberAppTheme.gold,
-                .font: UIFont.systemFont(ofSize: 32, weight: .bold),
-            ]
-            nav.navigationBar.standardAppearance = appearance
-            nav.navigationBar.scrollEdgeAppearance = appearance
-            nav.navigationBar.tintColor = BarberAppTheme.gold
-        }
+    private func wrapInNav(_ vc: UIViewController, title: String) -> UINavigationController {
+        let nav = UINavigationController(rootViewController: vc)
+        vc.navigationItem.title = title
+
+        let appearance = UINavigationBarAppearance()
+        appearance.configureWithOpaqueBackground()
+        appearance.backgroundColor = UIColor(white: 0.06, alpha: 0.97)
+        appearance.titleTextAttributes = [
+            .foregroundColor: BarberTheme.gold,
+            .font: UIFont.systemFont(ofSize: 18, weight: .bold),
+        ]
+        appearance.largeTitleTextAttributes = [
+            .foregroundColor: BarberTheme.gold,
+            .font: UIFont.systemFont(ofSize: 30, weight: .bold),
+        ]
+        nav.navigationBar.standardAppearance = appearance
+        nav.navigationBar.scrollEdgeAppearance = appearance
+        nav.navigationBar.tintColor = BarberTheme.gold
+
+        let settingsBtn = UIBarButtonItem(
+            image: UIImage(systemName: "gearshape.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .medium)),
+            style: .plain,
+            target: self,
+            action: #selector(openSettings)
+        )
+        vc.navigationItem.rightBarButtonItem = settingsBtn
+
+        return nav
     }
 
     private func setupTabBar() {
         view.addSubview(tabBar)
         tabBar.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            tabBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: BarberDesign.tabBarMargin),
-            tabBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -BarberDesign.tabBarMargin),
-            tabBar.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -BarberDesign.tabBarBottomOffset),
-            tabBar.heightAnchor.constraint(equalToConstant: BarberDesign.tabBarHeight),
+            tabBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: BarberTheme.tabBarSideMargin),
+            tabBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -BarberTheme.tabBarSideMargin),
+            tabBar.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -BarberTheme.tabBarBottomOffset),
+            tabBar.heightAnchor.constraint(equalToConstant: BarberTheme.tabBarHeight),
         ])
-        tabBar.onTabSelected = { [weak self] index in
+        tabBar.onSelect = { [weak self] index in
             self?.showViewController(at: index)
         }
     }
@@ -100,7 +107,14 @@ class MainTabViewController: UIViewController {
         tabBar.selectedIndex = index
     }
 
+    @objc private func openSettings() {
+        let vc = SettingsViewController()
+        let nav = UINavigationController(rootViewController: vc)
+        nav.modalPresentationStyle = .formSheet
+        present(nav, animated: true)
+    }
+
     func setBadge(_ count: Int, forTab index: Int) {
-        tabBar.setBadge(count, forTab: index)
+        tabBar.setBadge(count, at: index)
     }
 }

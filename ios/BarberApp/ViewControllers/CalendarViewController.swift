@@ -1,60 +1,31 @@
-/*
- BarberApp — CalendarViewController
- LAYOUT:
- ┌─────────────────────────────────┐
- │  [< Mês/Ano >]  [Hoje] [+ Novo] │  <- Header
- ├─────────────────────────────────┤
- │  Dom Seg Ter Qua Qui Sex Sab    │  <- Dias da semana
- │   1   2   3   4   5   6   7    │
- │   8   9  10  11  12  13  14    │  <- Grid com dots coloridos por barbeiro
- ├─────────────────────────────────┤
- │ [Todos] [João] [Pedro] [Carlos] │  <- Filtro por barbeiro
- ├─────────────────────────────────┤
- │ AGENDAMENTOS DE [DIA SELECIONADO]│
- │  ┌──────────────────────────┐   │
- │  │ 09:00 • Corte            │   │  <- AppointmentCard
- │  │ João Silva               │   │
- │  │ 💈 João  ● Confirmado    │   │
- │  └──────────────────────────┘   │
- └─────────────────────────────────┘
- */
+//
+//  CalendarViewController.swift
+//  BarberApp
+//
+//  Calendário com 3 modos: Dia (esteira) / Semana / Mês (com dots)
+//
 
 import UIKit
 
+// MARK: - CalendarMode
+enum CalendarMode { case day, week, month }
+
+// MARK: - CalendarViewController
 class CalendarViewController: UIViewController {
 
-    // MARK: - Properties
-    var selectedDate: Date = Date()
-    var appointments: [Appointment] = []
-    var barbers: [BarberInfo] = []
-    var selectedBarberId: String? = nil // nil = todos
-    var daysWithAppointments: [String: [String]] = [:]
-    var baseURL: String = AuthService.productionBaseURL
-    var apiKey: String = ""
+    private var mode: CalendarMode = .month
+    private var selectedDate = Date()
+    private var appointments: [Appointment] = []
+    private var monthDots: [String: Int] = [:]
 
-    // MARK: - UI
     private let scrollView = UIScrollView()
-    private let contentStack = UIStackView()
-    private let headerStack = UIStackView()
-    private let monthLabel = UILabel()
-    private let todayButton = UIButton(type: .system)
-    private let newButton = UIButton(type: .system)
-    private let prevButton = UIButton(type: .system)
-    private let nextButton = UIButton(type: .system)
-    private let calendarCollectionView: UICollectionView
-    private let barberFilterScrollView = UIScrollView()
-    private let barberFilterStack = UIStackView()
-    private let appointmentsTableStack = UIStackView()
-    private let selectedDayLabel = UILabel()
+    private let modeSegment = UISegmentedControl(items: ["Dia", "Semana", "Mês"])
+    private let monthHeaderView = MonthCalendarView()
+    private let dayTimelineView = DayTimelineView()
+    private let weekGridView = WeekGridView()
+    private let barberFilterView = BarberFilterBar()
     private let refreshControl = UIRefreshControl()
-
-    private let calendarLayout: UICollectionViewFlowLayout = {
-        let layout = UICollectionViewFlowLayout()
-        layout.minimumInteritemSpacing = 4
-        layout.minimumLineSpacing = 4
-        layout.sectionInset = UIEdgeInsets(top: 8, left: 8, bottom: 8, right: 8)
-        return layout
-    }()
+    private var selectedBarberId: String?
 
     private lazy var dateFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -63,405 +34,652 @@ class CalendarViewController: UIViewController {
         return f
     }()
 
-    private lazy var monthYearFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "MMMM yyyy"
-        f.locale = Locale(identifier: "pt_BR")
-        return f
-    }()
-
-    /// Formato para exibição: "01 de Março/26"
-    private lazy var displayDateFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "dd 'de' MMMM/yy"
-        f.locale = Locale(identifier: "pt_BR")
-        return f
-    }()
-
-    override init(nibName nibNameOrNil: String?, bundle nibBundleOrNil: Bundle?) {
-        self.calendarCollectionView = UICollectionView(frame: .zero, collectionViewLayout: calendarLayout)
-        super.init(nibName: nibNameOrNil, bundle: nibBundleOrNil)
-    }
-
-    required init?(coder: NSCoder) {
-        self.calendarCollectionView = UICollectionView(frame: .zero, collectionViewLayout: calendarLayout)
-        super.init(coder: coder)
-    }
-
-    // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = BarberAppTheme.background
-        setupUI()
-        loadBarbers()
+        view.backgroundColor = BarberTheme.bg
+        setupNav()
+        setupSegment()
+        setupScrollView()
+        setupViews()
+        setupBarberFilter()
+        switchMode(.month, animated: false)
         loadMonthDots()
         loadAppointments()
     }
 
-    private func setupUI() {
-        scrollView.translatesAutoresizingMaskIntoConstraints = false
-        scrollView.alwaysBounceVertical = true
-        view.addSubview(scrollView)
-        refreshControl.addTarget(self, action: #selector(refreshData), for: .valueChanged)
+    private func setupNav() {
+        title = "Calendário"
+        navigationController?.navigationBar.prefersLargeTitles = true
+        navigationItem.rightBarButtonItems = [
+            UIBarButtonItem(title: "+ Novo", style: .plain, target: self, action: #selector(newAppointment)),
+            UIBarButtonItem(title: "Hoje", style: .plain, target: self, action: #selector(goToToday)),
+        ]
+        navigationItem.rightBarButtonItems?.forEach { $0.tintColor = BarberTheme.gold }
+    }
+
+    private func setupSegment() {
+        modeSegment.selectedSegmentIndex = 2
+        modeSegment.backgroundColor = BarberTheme.surface
+        modeSegment.selectedSegmentTintColor = BarberTheme.gold
+        modeSegment.setTitleTextAttributes([.foregroundColor: UIColor.white, .font: UIFont.systemFont(ofSize: 13, weight: .medium)], for: .normal)
+        modeSegment.setTitleTextAttributes([.foregroundColor: UIColor.black, .font: UIFont.systemFont(ofSize: 13, weight: .bold)], for: .selected)
+        modeSegment.addTarget(self, action: #selector(segmentChanged), for: .valueChanged)
+        view.addSubview(modeSegment)
+        modeSegment.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            modeSegment.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
+            modeSegment.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
+            modeSegment.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            modeSegment.heightAnchor.constraint(equalToConstant: 36),
+        ])
+    }
+
+    private func setupScrollView() {
+        scrollView.showsVerticalScrollIndicator = false
+        refreshControl.tintColor = BarberTheme.gold
+        refreshControl.addTarget(self, action: #selector(handleRefresh), for: .valueChanged)
         scrollView.refreshControl = refreshControl
-
-        contentStack.axis = .vertical
-        contentStack.spacing = 16
-        contentStack.translatesAutoresizingMaskIntoConstraints = false
-        scrollView.addSubview(contentStack)
-
-        // Header: [< Mês/Ano >] [Hoje] [+ Novo]
-        headerStack.axis = .horizontal
-        headerStack.spacing = 12
-        headerStack.alignment = .center
-        prevButton.setTitle("<", for: .normal)
-        prevButton.tintColor = BarberAppTheme.textPrimary
-        prevButton.addTarget(self, action: #selector(prevMonth), for: .touchUpInside)
-        nextButton.setTitle(">", for: .normal)
-        nextButton.tintColor = BarberAppTheme.textPrimary
-        nextButton.addTarget(self, action: #selector(nextMonth), for: .touchUpInside)
-        monthLabel.font = .systemFont(ofSize: 18, weight: .semibold)
-        monthLabel.textColor = BarberAppTheme.gold
-        todayButton.setTitle("Hoje", for: .normal)
-        todayButton.tintColor = BarberAppTheme.gold
-        todayButton.addTarget(self, action: #selector(goToday), for: .touchUpInside)
-        newButton.setTitle("+ Novo", for: .normal)
-        newButton.tintColor = BarberAppTheme.gold
-        newButton.addTarget(self, action: #selector(newAppointment), for: .touchUpInside)
-        headerStack.addArrangedSubview(prevButton)
-        headerStack.addArrangedSubview(monthLabel)
-        headerStack.addArrangedSubview(nextButton)
-        headerStack.addArrangedSubview(UIView())
-        headerStack.addArrangedSubview(todayButton)
-        headerStack.addArrangedSubview(newButton)
-        contentStack.addArrangedSubview(headerStack)
-
-        // Calendar grid
-        calendarCollectionView.backgroundColor = BarberAppTheme.card
-        calendarCollectionView.layer.cornerRadius = 12
-        calendarCollectionView.delegate = self
-        calendarCollectionView.dataSource = self
-        calendarCollectionView.register(CalendarDayCell.self, forCellWithReuseIdentifier: CalendarDayCell.reuseId)
-        calendarCollectionView.register(CalendarHeaderView.self, forSupplementaryViewOfKind: UICollectionView.elementKindSectionHeader, withReuseIdentifier: CalendarHeaderView.reuseId)
-        calendarCollectionView.translatesAutoresizingMaskIntoConstraints = false
-        calendarCollectionView.heightAnchor.constraint(equalToConstant: 240).isActive = true
-        contentStack.addArrangedSubview(calendarCollectionView)
-
-        // Barbers filter
-        barberFilterScrollView.showsHorizontalScrollIndicator = false
-        barberFilterStack.axis = .horizontal
-        barberFilterStack.spacing = 8
-        barberFilterStack.translatesAutoresizingMaskIntoConstraints = false
-        barberFilterScrollView.addSubview(barberFilterStack)
-        contentStack.addArrangedSubview(barberFilterScrollView)
+        view.addSubview(scrollView)
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            barberFilterScrollView.heightAnchor.constraint(equalToConstant: 44)
-        ])
-        NSLayoutConstraint.activate([
-            barberFilterStack.leadingAnchor.constraint(equalTo: barberFilterScrollView.leadingAnchor),
-            barberFilterStack.trailingAnchor.constraint(equalTo: barberFilterScrollView.trailingAnchor),
-            barberFilterStack.topAnchor.constraint(equalTo: barberFilterScrollView.topAnchor),
-            barberFilterStack.bottomAnchor.constraint(equalTo: barberFilterScrollView.bottomAnchor),
-        ])
-
-        // Appointments
-        selectedDayLabel.font = .systemFont(ofSize: 16, weight: .semibold)
-        selectedDayLabel.textColor = BarberAppTheme.textPrimary
-        selectedDayLabel.text = "Agendamentos"
-        contentStack.addArrangedSubview(selectedDayLabel)
-        appointmentsTableStack.axis = .vertical
-        appointmentsTableStack.spacing = 12
-        contentStack.addArrangedSubview(appointmentsTableStack)
-
-        NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            scrollView.topAnchor.constraint(equalTo: modeSegment.bottomAnchor, constant: 12),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            contentStack.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor, constant: 16),
-            contentStack.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor, constant: 16),
-            contentStack.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor, constant: -16),
-            contentStack.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor, constant: -16),
-            contentStack.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor, constant: -32)
         ])
-
-        updateMonthLabel()
     }
 
-    private func updateMonthLabel() {
-        monthLabel.text = monthYearFormatter.string(from: selectedDate).capitalized
-        selectedDayLabel.text = "Agendamentos de \(displayDateFormatter.string(from: selectedDate))"
-    }
-
-    // MARK: - Actions
-    @objc private func prevMonth() {
-        if let newDate = Calendar.current.date(byAdding: .month, value: -1, to: selectedDate) {
-            selectedDate = newDate
-            updateMonthLabel()
-            loadMonthDots()
-            calendarCollectionView.reloadData()
+    private func setupViews() {
+        [monthHeaderView, dayTimelineView, weekGridView].forEach {
+            scrollView.addSubview($0)
+            $0.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                $0.topAnchor.constraint(equalTo: scrollView.topAnchor),
+                $0.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+                $0.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            ])
         }
-    }
 
-    @objc private func nextMonth() {
-        if let newDate = Calendar.current.date(byAdding: .month, value: 1, to: selectedDate) {
-            selectedDate = newDate
-            updateMonthLabel()
-            loadMonthDots()
-            calendarCollectionView.reloadData()
+        monthHeaderView.onDaySelected = { [weak self] date in
+            self?.selectedDate = date
+            self?.loadAppointments()
         }
-    }
-
-    @objc private func goToday() {
-        selectedDate = Date()
-        updateMonthLabel()
-        loadMonthDots()
-        loadAppointments()
-        calendarCollectionView.reloadData()
-    }
-
-    @objc private func newAppointment() {
-        // TODO: apresentar tela de novo agendamento
-    }
-
-    @objc private func refreshData() {
-        loadMonthDots()
-        loadAppointments()
-        loadBarbers()
-        refreshControl.endRefreshing()
-    }
-
-    private func selectBarber(_ id: String?) {
-        selectedBarberId = id
-        loadAppointments()
-        // Atualizar UI dos botões
-    }
-
-    // MARK: - API
-    private func loadBarbers() {
-        guard let url = URL(string: "\(baseURL)/api/app/barbers") else { return }
-        var req = URLRequest(url: url)
-        req.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
-        URLSession.shared.dataTask(with: req) { [weak self] data, _, _ in
-            guard let data = data,
-                  let barbers = try? JSONDecoder().decode([BarberInfo].self, from: data) else { return }
-            DispatchQueue.main.async {
-                self?.barbers = barbers
-                self?.updateBarberFilter()
+        monthHeaderView.onSwipeMonth = { [weak self] direction in
+            if let d = Calendar.current.date(byAdding: .month, value: direction, to: self?.selectedDate ?? Date()) {
+                self?.selectedDate = d
+                self?.monthHeaderView.setCurrentDate(d)
+                self?.loadMonthDots()
             }
-        }.resume()
-    }
-
-    private func updateBarberFilter() {
-        barberFilterStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        let allBtn = createBarberButton(title: "Todos", barberId: nil)
-        barberFilterStack.addArrangedSubview(allBtn)
-        for b in barbers {
-            let btn = createBarberButton(title: b.name, barberId: b.id)
-            barberFilterStack.addArrangedSubview(btn)
         }
     }
 
-    private func createBarberButton(title: String, barberId: String?) -> UIButton {
-        let btn = UIButton(type: .system)
-        btn.setTitle(title, for: .normal)
-        btn.tintColor = BarberAppTheme.gold
-        btn.addAction(UIAction { [weak self] _ in
+    private func setupBarberFilter() {
+        view.addSubview(barberFilterView)
+        barberFilterView.translatesAutoresizingMaskIntoConstraints = false
+        barberFilterView.isHidden = true
+        barberFilterView.onFilter = { [weak self] barberId in
             self?.selectedBarberId = barberId
             self?.loadAppointments()
-        }, for: .touchUpInside)
-        return btn
+        }
+        NSLayoutConstraint.activate([
+            barberFilterView.topAnchor.constraint(equalTo: modeSegment.bottomAnchor, constant: 52),
+            barberFilterView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            barberFilterView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            barberFilterView.heightAnchor.constraint(equalToConstant: 40),
+        ])
     }
 
-    private func loadMonthDots() {
-        let month = dateFormatter.string(from: selectedDate).prefix(7)
-        guard let url = URL(string: "\(baseURL)/api/app/appointments/month?month=\(month)") else { return }
-        var req = URLRequest(url: url)
-        req.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
-        URLSession.shared.dataTask(with: req) { [weak self] data, _, _ in
-            guard let data = data,
-                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let days = json["days_with_appointments"] as? [String: [String: Any]] else {
-                DispatchQueue.main.async { self?.daysWithAppointments = [:] }
-                return
-            }
-            let result = days.mapValues { ($0["statuses"] as? [String]) ?? [] }
-            DispatchQueue.main.async {
-                self?.daysWithAppointments = result
-                self?.calendarCollectionView.reloadData()
-            }
-        }.resume()
+    @objc private func segmentChanged() {
+        let modes: [CalendarMode] = [.day, .week, .month]
+        switchMode(modes[modeSegment.selectedSegmentIndex])
+    }
+
+    private func switchMode(_ newMode: CalendarMode, animated: Bool = true) {
+        mode = newMode
+        let block = {
+            self.monthHeaderView.isHidden = newMode != .month
+            self.dayTimelineView.isHidden = newMode != .day
+            self.weekGridView.isHidden = newMode != .week
+            self.barberFilterView.isHidden = false
+        }
+        if animated {
+            UIView.animate(withDuration: 0.2, animations: block)
+        } else {
+            block()
+        }
+        loadAppointments()
     }
 
     private func loadAppointments() {
         let dateStr = dateFormatter.string(from: selectedDate)
-        var urlStr = "\(baseURL)/api/app/appointments?date=\(dateStr)"
-        if let barberId = selectedBarberId {
-            urlStr += "&barber_id=\(barberId)"
-        }
-        guard let url = URL(string: urlStr) else { return }
-        var req = URLRequest(url: url)
-        req.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
-        URLSession.shared.dataTask(with: req) { [weak self] data, _, _ in
-            guard let data = data,
-                  let json = try? JSONDecoder().decode(AppointmentsResponse.self, from: data) else {
-                DispatchQueue.main.async { self?.reloadAppointmentsTable([]) }
-                return
-            }
+        var path = "/api/app/appointments?date=\(dateStr)"
+        if let b = selectedBarberId { path += "&barber_id=\(b)" }
+
+        ApiService.shared.fetch(path) { [weak self] (result: Result<AppointmentsResponse, Error>) in
             DispatchQueue.main.async {
-                self?.appointments = json.appointments
-                self?.reloadAppointmentsTable(json.appointments)
-            }
-        }.resume()
-    }
-
-    private func reloadAppointmentsTable(_ list: [Appointment]) {
-        appointmentsTableStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        for a in list {
-            let card = AppointmentCardView(appointment: a)
-            appointmentsTableStack.addArrangedSubview(card)
-        }
-    }
-}
-
-struct AppointmentsResponse: Codable {
-    let appointments: [Appointment]
-}
-
-// MARK: - UICollectionView
-extension CalendarViewController: UICollectionViewDataSource, UICollectionViewDelegate, UICollectionViewDelegateFlowLayout {
-    func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        let cal = Calendar.current
-        let range = cal.range(of: .day, in: .month, for: selectedDate)!
-        let firstWeekday = cal.component(.weekday, from: cal.date(from: cal.dateComponents([.year, .month], from: selectedDate))!) - 1
-        return range.count + firstWeekday
-    }
-
-    func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
-        let cell = collectionView.dequeueReusableCell(withReuseIdentifier: CalendarDayCell.reuseId, for: indexPath) as! CalendarDayCell
-        let cal = Calendar.current
-        let firstWeekday = cal.component(.weekday, from: cal.date(from: cal.dateComponents([.year, .month], from: selectedDate))!) - 1
-        if indexPath.item < firstWeekday {
-            cell.configure(day: nil, hasAppointments: false, isSelected: false, isToday: false)
-        } else {
-            let day = indexPath.item - firstWeekday + 1
-            let dateStr = String(format: "%04d-%02d-%02d",
-                                cal.component(.year, from: selectedDate),
-                                cal.component(.month, from: selectedDate),
-                                day)
-            let hasAppointments = !(daysWithAppointments[dateStr] ?? []).isEmpty
-            let comps = DateComponents(year: cal.component(.year, from: selectedDate), month: cal.component(.month, from: selectedDate), day: day)
-            let cellDate = cal.date(from: comps) ?? selectedDate
-            let isSelected = cal.isDate(selectedDate, inSameDayAs: cellDate)
-            let isToday = cal.isDateInToday(cellDate)
-            cell.configure(day: day, hasAppointments: hasAppointments, isSelected: isSelected, isToday: isToday)
-            cell.onTap = { [weak self] in
-                if let d = cal.date(from: DateComponents(year: cal.component(.year, from: self!.selectedDate), month: cal.component(.month, from: self!.selectedDate), day: day)) {
-                    self?.selectedDate = d
-                    self?.updateMonthLabel()
-                    self?.loadAppointments()
-                    collectionView.reloadData()
+                self?.refreshControl.endRefreshing()
+                if case .success(let resp) = result {
+                    self?.appointments = resp.appointments
+                    self?.reloadCurrentView()
                 }
             }
         }
-        return cell
     }
 
-    func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath) -> CGSize {
-        let w = (collectionView.bounds.width - 16 - 8*6) / 7
-        return CGSize(width: w, height: 36)
+    private func loadMonthDots() {
+        let month = dateFormatter.string(from: selectedDate).prefix(7)
+        ApiService.shared.fetch("/api/app/appointments/month?month=\(month)") { [weak self] (result: Result<MonthAppointmentsResponse, Error>) in
+            DispatchQueue.main.async {
+                if case .success(let resp) = result {
+                    var dots: [String: Int] = [:]
+                    resp.days_with_appointments?.forEach { day, info in
+                        dots[day] = info.count ?? 0
+                    }
+                    self?.monthDots = dots
+                    self?.monthHeaderView.setDots(dots)
+                    self?.monthHeaderView.setCurrentDate(self?.selectedDate ?? Date())
+                }
+            }
+        }
+    }
+
+    private func reloadCurrentView() {
+        switch mode {
+        case .day:
+            dayTimelineView.setAppointments(appointments, for: selectedDate)
+        case .week:
+            weekGridView.setAppointments(appointments, weekOf: selectedDate)
+        case .month:
+            monthHeaderView.setSelectedDate(selectedDate)
+        }
+    }
+
+    @objc private func goToToday() {
+        selectedDate = Date()
+        loadMonthDots()
+        loadAppointments()
+        modeSegment.selectedSegmentIndex = 2
+        switchMode(.month)
+    }
+
+    @objc private func newAppointment() {
+        let vc = NewAppointmentViewController()
+        navigationController?.present(UINavigationController(rootViewController: vc), animated: true)
+    }
+
+    @objc private func handleRefresh() {
+        loadAppointments()
     }
 }
 
-// MARK: - Cells & Views
-class CalendarDayCell: UICollectionViewCell {
-    static let reuseId = "CalendarDayCell"
-    private let label = UILabel()
-    private let dotView = UIView()
-    var onTap: (() -> Void)?
+// MARK: - DayTimelineView
+class DayTimelineView: UIView {
+
+    private let scrollView = UIScrollView()
+    private var appts: [Appointment] = []
+    private var date = Date()
+
+    private let hourHeight: CGFloat = 64
+    private let leftPad: CGFloat = 56
+    private let startHour = 8
+    private let endHour = 22
+    private var totalHours: Int { endHour - startHour }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        label.font = .systemFont(ofSize: 14, weight: .medium)
-        label.textAlignment = .center
-        label.translatesAutoresizingMaskIntoConstraints = false
-        contentView.addSubview(label)
-        dotView.backgroundColor = .systemOrange
-        dotView.layer.cornerRadius = 3
-        dotView.translatesAutoresizingMaskIntoConstraints = false
-        dotView.isHidden = true
-        contentView.addSubview(dotView)
+        addSubview(scrollView)
+        scrollView.showsVerticalScrollIndicator = false
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            label.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-            label.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 4),
-            dotView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-            dotView.topAnchor.constraint(equalTo: label.bottomAnchor, constant: 2),
-            dotView.widthAnchor.constraint(equalToConstant: 6),
-            dotView.heightAnchor.constraint(equalToConstant: 6)
+            scrollView.topAnchor.constraint(equalTo: topAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            scrollView.heightAnchor.constraint(equalToConstant: 500),
         ])
-        contentView.isUserInteractionEnabled = true
-        let tap = UITapGestureRecognizer(target: self, action: #selector(tapped))
-        contentView.addGestureRecognizer(tap)
+    }
+    required init?(coder: NSCoder) { fatalError() }
+
+    func setAppointments(_ appointments: [Appointment], for date: Date) {
+        appts = appointments
+        self.date = date
+        redraw()
     }
 
-    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    private func redraw() {
+        scrollView.subviews.forEach { $0.removeFromSuperview() }
 
-    func configure(day: Int?, hasAppointments: Bool, isSelected: Bool, isToday: Bool) {
-        label.text = day.map { "\($0)" } ?? ""
-        dotView.isHidden = !hasAppointments
-        dotView.backgroundColor = BarberAppTheme.gold
-        contentView.backgroundColor = isSelected ? BarberAppTheme.gold : (isToday ? BarberAppTheme.goldDim : .clear)
-        contentView.layer.cornerRadius = 8
-        label.textColor = isSelected ? BarberAppTheme.background : (hasAppointments ? BarberAppTheme.textPrimary : BarberAppTheme.textSecondary)
+        let totalHeight = CGFloat(totalHours) * hourHeight
+        let contentWidth = bounds.width > 0 ? bounds.width : UIScreen.main.bounds.width
+        let contentView = UIView(frame: CGRect(x: 0, y: 0, width: contentWidth, height: totalHeight + 32))
+        scrollView.addSubview(contentView)
+        scrollView.contentSize = contentView.frame.size
+
+        for h in 0...totalHours {
+            let y = CGFloat(h) * hourHeight + 16
+            let hour = startHour + h
+            if hour > endHour { break }
+
+            let lbl = UILabel()
+            lbl.text = String(format: "%02d:00", hour)
+            lbl.font = .monospacedSystemFont(ofSize: 11, weight: .medium)
+            lbl.textColor = BarberTheme.textMuted
+            lbl.frame = CGRect(x: 8, y: y - 8, width: 44, height: 16)
+            contentView.addSubview(lbl)
+
+            let line = UIView()
+            line.backgroundColor = BarberTheme.border
+            line.frame = CGRect(x: leftPad, y: y, width: contentWidth - leftPad - 16, height: 0.5)
+            contentView.addSubview(line)
+        }
+
+        if Calendar.current.isDateInToday(date) {
+            let now = Date()
+            let comps = Calendar.current.dateComponents([.hour, .minute], from: now)
+            let h = CGFloat((comps.hour ?? 0) - startHour)
+            let m = CGFloat(comps.minute ?? 0)
+            let y = h * hourHeight + (m / 60) * hourHeight + 16
+
+            let nowLine = UIView()
+            nowLine.backgroundColor = BarberTheme.danger
+            nowLine.frame = CGRect(x: leftPad - 4, y: y, width: contentWidth - leftPad - 12, height: 2)
+            nowLine.layer.cornerRadius = 1
+            contentView.addSubview(nowLine)
+
+            let dot = UIView()
+            dot.backgroundColor = BarberTheme.danger
+            dot.frame = CGRect(x: leftPad - 8, y: y - 4, width: 8, height: 8)
+            dot.layer.cornerRadius = 4
+            contentView.addSubview(dot)
+        }
+
+        let colWidth = contentWidth - leftPad - 16
+        for (idx, appt) in appts.enumerated() {
+            guard let apptDate = ISO8601DateFormatter().date(from: appt.appointmentDate) else { continue }
+            let apptComps = Calendar.current.dateComponents([.hour, .minute], from: apptDate)
+            let h = CGFloat((apptComps.hour ?? 0) - startHour)
+            let m = CGFloat(apptComps.minute ?? 0)
+            let y = h * hourHeight + (m / 60) * hourHeight + 16
+
+            let duration = CGFloat(appt.service?.durationMinutes ?? 60)
+            let height = max((duration / 60.0) * hourHeight - 4, 44)
+
+            let block = AppointmentTimeBlock()
+            block.configure(with: appt)
+            block.frame = CGRect(x: leftPad + 4, y: y + 2, width: colWidth - 4, height: height)
+            block.layer.cornerRadius = 10
+            block.layer.cornerCurve = .continuous
+            block.tag = idx
+
+            let tap = UITapGestureRecognizer(target: self, action: #selector(blockTapped(_:)))
+            block.addGestureRecognizer(tap)
+            block.isUserInteractionEnabled = true
+            contentView.addSubview(block)
+        }
     }
 
-    @objc private func tapped() { onTap?() }
+    @objc private func blockTapped(_ gr: UITapGestureRecognizer) {
+        guard let vc = findViewController() as? CalendarViewController,
+              let view = gr.view,
+              view.tag < appts.count else { return }
+        let appt = appts[view.tag]
+        let detail = AppointmentDetailViewController(appointment: appt)
+        vc.navigationController?.pushViewController(detail, animated: true)
+    }
 }
 
-class CalendarHeaderView: UICollectionReusableView {
-    static let reuseId = "CalendarHeaderView"
-}
-
-class AppointmentCardView: UIView {
+// MARK: - AppointmentTimeBlock
+class AppointmentTimeBlock: UIView {
+    private let colorBar = UIView()
     private let timeLabel = UILabel()
+    private let nameLabel = UILabel()
     private let serviceLabel = UILabel()
-    private let customerLabel = UILabel()
-    private let statusBadge = UILabel()
 
-    init(appointment: Appointment) {
-        super.init(frame: .zero)
-        backgroundColor = BarberAppTheme.card
-        layer.cornerRadius = 12
-        timeLabel.font = .systemFont(ofSize: 14, weight: .semibold)
-        timeLabel.textColor = BarberAppTheme.gold
-        serviceLabel.font = .systemFont(ofSize: 14, weight: .medium)
-        serviceLabel.textColor = BarberAppTheme.textPrimary
-        customerLabel.font = .systemFont(ofSize: 12)
-        customerLabel.textColor = BarberAppTheme.textSecondary
-        statusBadge.font = .systemFont(ofSize: 11, weight: .medium)
-        statusBadge.textAlignment = .center
-        statusBadge.layer.cornerRadius = 4
-        statusBadge.clipsToBounds = true
-        let stack = UIStackView(arrangedSubviews: [timeLabel, serviceLabel, customerLabel, statusBadge])
-        stack.axis = .vertical
-        stack.spacing = 4
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(stack)
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        backgroundColor = BarberTheme.surface
+        layer.borderWidth = 1
+        layer.borderColor = BarberTheme.border.cgColor
+        clipsToBounds = true
+
+        colorBar.frame = CGRect(x: 0, y: 0, width: 4, height: 0)
+        addSubview(colorBar)
+
+        [timeLabel, nameLabel, serviceLabel].forEach {
+            addSubview($0)
+            $0.translatesAutoresizingMaskIntoConstraints = false
+        }
+        timeLabel.font = .monospacedSystemFont(ofSize: 10, weight: .bold)
+        timeLabel.textColor = BarberTheme.textMuted
+        nameLabel.font = .systemFont(ofSize: 13, weight: .semibold)
+        nameLabel.textColor = BarberTheme.textPrimary
+        serviceLabel.font = .systemFont(ofSize: 11)
+        serviceLabel.textColor = BarberTheme.textSecond
+
         NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: topAnchor, constant: 12),
-            stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
-            stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
-            stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -12)
+            timeLabel.topAnchor.constraint(equalTo: topAnchor, constant: 6),
+            timeLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
+            nameLabel.topAnchor.constraint(equalTo: timeLabel.bottomAnchor, constant: 2),
+            nameLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
+            nameLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
+            serviceLabel.topAnchor.constraint(equalTo: nameLabel.bottomAnchor, constant: 1),
+            serviceLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
         ])
-        let time = ISO8601DateFormatter().date(from: appointment.appointmentDate).map {
-            DateFormatter.localizedString(from: $0, dateStyle: .none, timeStyle: .short)
-        } ?? "-"
-        timeLabel.text = "\(time) • \(appointment.service?.name ?? "-")"
-        customerLabel.text = appointment.customerName
-        statusBadge.text = " \(appointment.status.displayName) "
-        statusBadge.backgroundColor = appointment.status.color.withAlphaComponent(0.3)
-        statusBadge.textColor = appointment.status.color
+    }
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        colorBar.frame = CGRect(x: 0, y: 0, width: 4, height: bounds.height)
     }
 
-    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    func configure(with appt: Appointment) {
+        let statusStr = appt.status.rawValue
+        let color = BarberTheme.statusColor(statusStr)
+        colorBar.backgroundColor = color
+        backgroundColor = color.withAlphaComponent(0.10)
+        layer.borderColor = color.withAlphaComponent(0.25).cgColor
+
+        if let d = ISO8601DateFormatter().date(from: appt.appointmentDate) {
+            let fmt = DateFormatter()
+            fmt.dateFormat = "HH:mm"
+            timeLabel.text = fmt.string(from: d)
+        }
+        nameLabel.text = appt.customerName
+        serviceLabel.text = "\(appt.barber.name)\(appt.service.map { " · \($0.name)" } ?? "")"
+    }
+}
+
+// MARK: - MonthCalendarView
+class MonthCalendarView: UIView {
+    var onDaySelected: ((Date) -> Void)?
+    var onSwipeMonth: ((Int) -> Void)?
+
+    private var currentDate = Date()
+    private var selectedDate = Date()
+    private var dots: [String: Int] = [:]
+    private let collectionView: UICollectionView
+
+    private let dayNames = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"]
+    private var days: [Date?] = []
+
+    override init(frame: CGRect) {
+        let layout = UICollectionViewFlowLayout()
+        layout.minimumInteritemSpacing = 2
+        layout.minimumLineSpacing = 2
+        collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
+        super.init(frame: frame)
+        buildCalendar()
+        addSwipeGestures()
+    }
+    required init?(coder: NSCoder) { fatalError() }
+
+    private func buildCalendar() {
+        backgroundColor = BarberTheme.surface
+        layer.cornerRadius = 16
+        layer.cornerCurve = .continuous
+        layer.borderWidth = 1
+        layer.borderColor = BarberTheme.border.cgColor
+
+        let headerStack = UIStackView()
+        headerStack.distribution = .fillEqually
+        dayNames.forEach { name in
+            let lbl = UILabel()
+            lbl.text = name
+            lbl.font = .systemFont(ofSize: 11, weight: .semibold)
+            lbl.textColor = BarberTheme.textMuted
+            lbl.textAlignment = .center
+            headerStack.addArrangedSubview(lbl)
+        }
+        addSubview(headerStack)
+        headerStack.translatesAutoresizingMaskIntoConstraints = false
+
+        collectionView.backgroundColor = .clear
+        collectionView.isScrollEnabled = false
+        collectionView.register(DayCell.self, forCellWithReuseIdentifier: "day")
+        collectionView.delegate = self
+        collectionView.dataSource = self
+        addSubview(collectionView)
+        collectionView.translatesAutoresizingMaskIntoConstraints = false
+
+        NSLayoutConstraint.activate([
+            headerStack.topAnchor.constraint(equalTo: topAnchor, constant: 12),
+            headerStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
+            headerStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
+            headerStack.heightAnchor.constraint(equalToConstant: 20),
+            collectionView.topAnchor.constraint(equalTo: headerStack.bottomAnchor, constant: 8),
+            collectionView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
+            collectionView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
+            collectionView.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -12),
+            collectionView.heightAnchor.constraint(equalToConstant: 240),
+        ])
+
+        generateDays()
+    }
+
+    private func addSwipeGestures() {
+        let left = UISwipeGestureRecognizer(target: self, action: #selector(swiped(_:)))
+        left.direction = .left
+        let right = UISwipeGestureRecognizer(target: self, action: #selector(swiped(_:)))
+        right.direction = .right
+        addGestureRecognizer(left)
+        addGestureRecognizer(right)
+    }
+
+    @objc private func swiped(_ gr: UISwipeGestureRecognizer) {
+        onSwipeMonth?(gr.direction == .left ? 1 : -1)
+        generateDays()
+        collectionView.reloadData()
+    }
+
+    private func generateDays() {
+        let cal = Calendar.current
+        let comps = cal.dateComponents([.year, .month], from: currentDate)
+        guard let first = cal.date(from: comps), let range = cal.range(of: .day, in: .month, for: first) else { return }
+        let weekday = cal.component(.weekday, from: first) - 1
+
+        days = Array(repeating: nil, count: weekday)
+        for d in 1...range.count {
+            days.append(cal.date(bySetting: .day, value: d, of: first))
+        }
+        while days.count % 7 != 0 { days.append(nil) }
+    }
+
+    func setDots(_ dots: [String: Int]) {
+        self.dots = dots
+        collectionView.reloadData()
+    }
+
+    func setCurrentDate(_ date: Date) {
+        currentDate = date
+        generateDays()
+        collectionView.reloadData()
+    }
+
+    func setSelectedDate(_ date: Date) {
+        selectedDate = date
+        collectionView.reloadData()
+    }
+}
+
+extension MonthCalendarView: UICollectionViewDataSource, UICollectionViewDelegateFlowLayout {
+    func collectionView(_ cv: UICollectionView, numberOfItemsInSection section: Int) -> Int { days.count }
+
+    func collectionView(_ cv: UICollectionView, cellForItemAt ip: IndexPath) -> UICollectionViewCell {
+        let cell = cv.dequeueReusableCell(withReuseIdentifier: "day", for: ip) as! DayCell
+        let date = days[ip.item]
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyy-MM-dd"
+        let dotCount = date.flatMap { dots[fmt.string(from: $0)] } ?? 0
+        let isToday = date.map { Calendar.current.isDateInToday($0) } ?? false
+        let isSelected = date.map { Calendar.current.isDate($0, inSameDayAs: selectedDate) } ?? false
+        cell.configure(date: date, dotCount: dotCount, isToday: isToday, isSelected: isSelected)
+        return cell
+    }
+
+    func collectionView(_ cv: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath) -> CGSize {
+        let w = (cv.bounds.width - 12) / 7
+        return CGSize(width: w, height: 34)
+    }
+
+    func collectionView(_ cv: UICollectionView, didSelectItemAt ip: IndexPath) {
+        guard let date = days[ip.item] else { return }
+        selectedDate = date
+        cv.reloadData()
+        onDaySelected?(date)
+    }
+}
+
+// MARK: - DayCell
+class DayCell: UICollectionViewCell {
+    private let numLabel = UILabel()
+    private let dotsStack = UIStackView()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        layer.cornerRadius = 10
+        layer.cornerCurve = .continuous
+
+        numLabel.font = .systemFont(ofSize: 14, weight: .medium)
+        numLabel.textAlignment = .center
+        contentView.addSubview(numLabel)
+
+        dotsStack.axis = .horizontal
+        dotsStack.spacing = 2
+        dotsStack.alignment = .center
+        contentView.addSubview(dotsStack)
+
+        numLabel.translatesAutoresizingMaskIntoConstraints = false
+        dotsStack.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            numLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            numLabel.centerYAnchor.constraint(equalTo: contentView.centerYAnchor, constant: -4),
+            dotsStack.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            dotsStack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -3),
+        ])
+    }
+    required init?(coder: NSCoder) { fatalError() }
+
+    func configure(date: Date?, dotCount: Int, isToday: Bool, isSelected: Bool) {
+        guard let date = date else {
+            numLabel.text = ""
+            dotsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+            backgroundColor = .clear
+            return
+        }
+        numLabel.text = "\(Calendar.current.component(.day, from: date))"
+        if isSelected {
+            backgroundColor = BarberTheme.gold
+            numLabel.textColor = .black
+            numLabel.font = .systemFont(ofSize: 14, weight: .bold)
+        } else if isToday {
+            backgroundColor = BarberTheme.gold.withAlphaComponent(0.15)
+            numLabel.textColor = BarberTheme.gold
+            numLabel.font = .systemFont(ofSize: 14, weight: .bold)
+        } else {
+            backgroundColor = .clear
+            numLabel.textColor = UIColor(white: 0.75, alpha: 1)
+            numLabel.font = .systemFont(ofSize: 14, weight: .medium)
+        }
+
+        dotsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        let count = min(dotCount, 3)
+        for _ in 0..<count {
+            let dot = UIView()
+            dot.backgroundColor = isSelected ? UIColor.black.withAlphaComponent(0.5) : BarberTheme.gold
+            dot.layer.cornerRadius = 2
+            dot.translatesAutoresizingMaskIntoConstraints = false
+            dot.widthAnchor.constraint(equalToConstant: 4).isActive = true
+            dot.heightAnchor.constraint(equalToConstant: 4).isActive = true
+            dotsStack.addArrangedSubview(dot)
+        }
+    }
+}
+
+// MARK: - WeekGridView
+class WeekGridView: UIView {
+    private let scrollView = UIScrollView()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        let lbl = UILabel()
+        lbl.text = "Visão semanal — em breve"
+        lbl.textColor = BarberTheme.textMuted
+        lbl.textAlignment = .center
+        addSubview(lbl)
+        lbl.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            lbl.centerXAnchor.constraint(equalTo: centerXAnchor),
+            lbl.topAnchor.constraint(equalTo: topAnchor, constant: 40),
+        ])
+    }
+    required init?(coder: NSCoder) { fatalError() }
+
+    func setAppointments(_ appointments: [Appointment], weekOf date: Date) {}
+}
+
+// MARK: - BarberFilterBar
+class BarberFilterBar: UIView {
+    var onFilter: ((String?) -> Void)?
+    private let scrollView = UIScrollView()
+    private var barbers: [BarberInfo] = []
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        scrollView.showsHorizontalScrollIndicator = false
+        addSubview(scrollView)
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            scrollView.topAnchor.constraint(equalTo: topAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: bottomAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
+            scrollView.trailingAnchor.constraint(equalTo: trailingAnchor),
+        ])
+        loadBarbers()
+    }
+    required init?(coder: NSCoder) { fatalError() }
+
+    private func loadBarbers() {
+        ApiService.shared.getBarbers { [weak self] result in
+            if case .success(let list) = result {
+                DispatchQueue.main.async { self?.buildButtons(list) }
+            }
+        }
+    }
+
+    private func buildButtons(_ barbers: [BarberInfo]) {
+        scrollView.subviews.forEach { $0.removeFromSuperview() }
+        self.barbers = barbers
+
+        var x: CGFloat = 0
+        let allItems: [(String, String?)] = [("Todos", nil)] + barbers.map { ($0.name, $0.id) }
+        for (name, id) in allItems {
+            let btn = UIButton(type: .system)
+            btn.setTitle(name, for: .normal)
+            btn.titleLabel?.font = .systemFont(ofSize: 13, weight: .medium)
+            btn.setTitleColor(BarberTheme.gold, for: .normal)
+            btn.layer.borderWidth = 1
+            btn.layer.borderColor = BarberTheme.goldDim.cgColor
+            btn.layer.cornerRadius = 14
+            btn.contentEdgeInsets = UIEdgeInsets(top: 4, left: 14, bottom: 4, right: 14)
+            btn.sizeToFit()
+            let w = btn.bounds.width + 28
+            btn.frame = CGRect(x: x, y: 2, width: w, height: 30)
+            btn.addAction(UIAction { [weak self] _ in self?.onFilter?(id) }, for: .touchUpInside)
+            scrollView.addSubview(btn)
+            x += w + 8
+        }
+        scrollView.contentSize = CGSize(width: x, height: 34)
+    }
+}
+
+// MARK: - UIView + findViewController
+extension UIView {
+    func findViewController() -> UIViewController? {
+        var r: UIResponder? = self
+        while let next = r?.next {
+            if let vc = next as? UIViewController { return vc }
+            r = next
+        }
+        return nil
+    }
 }

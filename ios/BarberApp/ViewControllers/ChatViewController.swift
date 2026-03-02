@@ -29,7 +29,7 @@ class ChatViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = customerName ?? phone
-        view.backgroundColor = BarberAppTheme.background
+        view.backgroundColor = BarberTheme.bg
         setupTableView()
         setupInputBar()
         loadMessages()
@@ -60,7 +60,7 @@ class ChatViewController: UIViewController {
         blurInput.layer.cornerCurve = .continuous
         blurInput.clipsToBounds = true
         blurInput.layer.borderWidth = 1
-        blurInput.layer.borderColor = BarberAppTheme.gold.withAlphaComponent(0.25).cgColor
+        blurInput.layer.borderColor = BarberTheme.gold.withAlphaComponent(0.25).cgColor
         view.addSubview(blurInput)
         blurInput.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
@@ -72,17 +72,17 @@ class ChatViewController: UIViewController {
 
         textField.placeholder = "Digite uma mensagem..."
         textField.textColor = .white
-        textField.tintColor = BarberAppTheme.gold
+        textField.tintColor = BarberTheme.gold
         textField.attributedPlaceholder = NSAttributedString(
             string: "Digite uma mensagem...",
-            attributes: [.foregroundColor: BarberAppTheme.textTertiary as Any]
+            attributes: [.foregroundColor: BarberTheme.textMuted as Any]
         )
         blurInput.contentView.addSubview(textField)
         textField.translatesAutoresizingMaskIntoConstraints = false
 
         let config = UIImage.SymbolConfiguration(pointSize: 30, weight: .medium)
         sendButton.setImage(UIImage(systemName: "arrow.up.circle.fill", withConfiguration: config), for: .normal)
-        sendButton.tintColor = BarberAppTheme.gold
+        sendButton.tintColor = BarberTheme.gold
         sendButton.addTarget(self, action: #selector(sendMessage), for: .touchUpInside)
         blurInput.contentView.addSubview(sendButton)
         sendButton.translatesAutoresizingMaskIntoConstraints = false
@@ -171,7 +171,7 @@ final class MessageBubbleCell: UITableViewCell {
         bubble.addSubview(msgLabel)
 
         timeLabel.font = .systemFont(ofSize: 10)
-        timeLabel.textColor = BarberAppTheme.textTertiary
+        timeLabel.textColor = BarberTheme.textMuted
         contentView.addSubview(timeLabel)
 
         bubble.translatesAutoresizingMaskIntoConstraints = false
@@ -206,10 +206,10 @@ final class MessageBubbleCell: UITableViewCell {
         trailingConstraint?.isActive = false
 
         if msg.isAttendant {
-            bubble.backgroundColor = BarberAppTheme.gold
+            bubble.backgroundColor = BarberTheme.gold
             trailingConstraint?.isActive = true
         } else {
-            bubble.backgroundColor = BarberAppTheme.card
+            bubble.backgroundColor = BarberTheme.surface
             leadingConstraint?.isActive = true
         }
     }
