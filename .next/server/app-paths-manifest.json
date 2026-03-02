@@ -1,0 +1,17 @@
+{
+  "/api/auth/login/route": "app/api/auth/login/route.js",
+  "/api/app/appointments/month/route": "app/api/app/appointments/month/route.js",
+  "/api/admin/stats/route": "app/api/admin/stats/route.js",
+  "/api/app/appointments/route": "app/api/app/appointments/route.js",
+  "/api/app/barbers/route": "app/api/app/barbers/route.js",
+  "/api/admin/services/route": "app/api/admin/services/route.js",
+  "/api/admin/barbers/route": "app/api/admin/barbers/route.js",
+  "/api/admin/tenant-profile/route": "app/api/admin/tenant-profile/route.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/dashboard/appointments/page": "app/dashboard/appointments/page.js",
+  "/dashboard/slots/page": "app/dashboard/slots/page.js",
+  "/dashboard/barbers/page": "app/dashboard/barbers/page.js",
+  "/dashboard/calendar/page": "app/dashboard/calendar/page.js",
+  "/dashboard/services/page": "app/dashboard/services/page.js",
+  "/dashboard/whatsapp/page": "app/dashboard/whatsapp/page.js"
+}

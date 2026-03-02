@@ -1,0 +1,196 @@
+// BARBERAPP — schema.prisma
+// Sistema de agendamento para barbearias — Multi-tenant
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id                         String   @id @default(uuid())
+  name                       String
+  slug                       String   @unique
+  api_key                    String   @unique @default(uuid())
+
+  // WhatsApp Meta Cloud API
+  whatsapp_phone             String?
+  meta_phone_number_id       String?
+  meta_access_token          String?
+  meta_verify_token          String?
+  meta_business_account_id   String?
+  bot_configured             Boolean  @default(false)
+
+  // Negócio
+  business_name              String?
+  logo_url                   String?
+  address                    String?
+  opening_time               String?  // "09:00"
+  closing_time               String?  // "20:00"
+  slot_duration_minutes      Int      @default(60) // duração padrão de cada atendimento
+
+  // Plano
+  plan_type                  String   @default("free")
+  plan_active                Boolean  @default(true)
+
+  // Relações
+  users                      User[]
+  barbers                    Barber[]
+  appointments               Appointment[]
+  services                   Service[]
+  slots                      Slot[]
+  bot_messages               BotMessage[]
+  message_usage              MessageUsage[]
+
+  created_at                 DateTime @default(now())
+  updated_at                 DateTime @updatedAt
+}
+
+model User {
+  id         String   @id @default(uuid())
+  tenant_id  String?  // null = super admin
+  barber_id  String?  @unique // preenchido quando role = barber (um user por barbeiro)
+  username   String   @unique
+  password   String   // bcrypt hash
+  name       String
+  role       String   @default("admin") // admin | owner | super_admin | barber
+  tenant     Tenant?  @relation(fields: [tenant_id], references: [id])
+  barber     Barber?  @relation(fields: [barber_id], references: [id])
+  created_at DateTime @default(now())
+}
+
+model Barber {
+  id           String        @id @default(uuid())
+  tenant_id    String
+  name         String
+  phone        String?
+  avatar_url   String?
+  active       Boolean       @default(true)
+  tenant       Tenant        @relation(fields: [tenant_id], references: [id])
+  user         User?         // login deste barbeiro (opcional)
+  slots        Slot[]
+  appointments Appointment[]
+  created_at   DateTime      @default(now())
+
+  @@index([tenant_id])
+}
+
+model Service {
+  id               String        @id @default(uuid())
+  tenant_id        String
+  name             String        // "Corte", "Barba", "Corte + Barba"
+  price            Float
+  duration_minutes Int           @default(60)
+  active           Boolean       @default(true)
+  tenant           Tenant        @relation(fields: [tenant_id], references: [id])
+  appointments     Appointment[]
+  created_at       DateTime      @default(now())
+
+  @@index([tenant_id])
+}
+
+model Slot {
+  id             String        @id @default(uuid())
+  tenant_id      String
+  barber_id      String
+  start_time     DateTime
+  end_time       DateTime
+  status         SlotStatus    @default(available)
+  appointment_id String?       @unique
+
+  tenant         Tenant        @relation(fields: [tenant_id], references: [id])
+  barber         Barber        @relation(fields: [barber_id], references: [id])
+  appointment    Appointment?  @relation(fields: [appointment_id], references: [id])
+
+  @@index([tenant_id])
+  @@index([tenant_id, barber_id, start_time])
+  @@index([tenant_id, status, start_time])
+  @@index([barber_id, start_time])
+}
+
+enum SlotStatus {
+  available
+  booked
+  blocked
+}
+
+model Appointment {
+  id                String            @id @default(uuid())
+  tenant_id         String
+  barber_id         String
+  service_id        String?
+  slot_id           String?           @unique
+
+  // Cliente
+  customer_name     String
+  customer_phone    String
+
+  // Agendamento
+  appointment_date  DateTime
+  status            AppointmentStatus @default(pending)
+
+  // Notas
+  barber_notes      String?
+  customer_notes    String?
+
+  // Controle
+  reminder_sent     Boolean           @default(false)
+  confirmed         Boolean           @default(false)
+
+  // Origem
+  origin            String            @default("whatsapp") // whatsapp | app | web
+
+  tenant            Tenant            @relation(fields: [tenant_id], references: [id])
+  barber            Barber            @relation(fields: [barber_id], references: [id])
+  service           Service?          @relation(fields: [service_id], references: [id])
+  slot              Slot?
+
+  created_at        DateTime          @default(now())
+  updated_at        DateTime          @updatedAt
+
+  @@index([tenant_id])
+  @@index([tenant_id, appointment_date])
+  @@index([tenant_id, barber_id, appointment_date])
+  @@index([customer_phone, tenant_id])
+}
+
+enum AppointmentStatus {
+  pending
+  confirmed
+  in_progress
+  completed
+  cancelled
+  no_show
+}
+
+model BotMessage {
+  id              String   @id @default(uuid())
+  tenant_id       String
+  customer_phone  String
+  direction       String   // in | out
+  body            String
+  wamid           String?  @unique
+  attendant_name  String?
+  is_bot          Boolean  @default(true)
+  created_at      DateTime @default(now())
+
+  tenant          Tenant   @relation(fields: [tenant_id], references: [id])
+
+  @@index([tenant_id, customer_phone])
+  @@index([tenant_id, customer_phone, created_at])
+}
+
+model MessageUsage {
+  id         String   @id @default(uuid())
+  tenant_id  String
+  month      Int
+  year       Int
+  count      Int      @default(0)
+  cost_usd   Float    @default(0)
+  tenant     Tenant   @relation(fields: [tenant_id], references: [id])
+
+  @@unique([tenant_id, month, year])
+}
