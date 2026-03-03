@@ -43,7 +43,7 @@ class AppointmentsViewController: UIViewController {
         segmentControl.addTarget(self, action: #selector(filterChanged), for: .valueChanged)
         segmentControl.autoresizingMask = [.flexibleWidth]
 
-        let w = max(view.bounds.width, UIScreen.main.bounds.width)
+        let w = view.bounds.width > 0 ? view.bounds.width : 320
         let headerW = w > 0 ? w : 320
         let container = UIView(frame: CGRect(x: 0, y: 0, width: headerW, height: 52))
         container.addSubview(segmentControl)
@@ -413,7 +413,7 @@ final class ReagendarViewController: UIViewController {
         title = "Novo dia e horário"
         view.backgroundColor = BarberTheme.bg
         navigationItem.leftBarButtonItem = UIBarButtonItem(barButtonSystemItem: .cancel, target: self, action: #selector(cancelar))
-        navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Reagendar", style: .done, target: self, action: #selector(reagendar))
+        navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Reagendar", style: .prominent, target: self, action: #selector(reagendar))
         navigationItem.rightBarButtonItem?.tintColor = BarberTheme.gold
 
         datePicker.datePickerMode = .dateAndTime
