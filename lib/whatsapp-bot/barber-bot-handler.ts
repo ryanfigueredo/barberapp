@@ -6,6 +6,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { getBotSession, putBotSession, updateBotSessionState, type BotSessionRecord } from '@/lib/dynamodb';
+import { saveBotMessage } from '@/lib/whatsapp-bot/save-bot-message';
 
 // ============ CONSTANTS ============
 
@@ -137,6 +138,16 @@ async function sendWhatsAppMessage(
     }
     throw new Error(r.error);
   }
+}
+
+async function sendAndLog(
+  tenantId: string,
+  toPhone: string,
+  message: string
+): Promise<void> {
+  await sendWhatsAppMessage(tenantId, toPhone, message);
+  const phone = normalizePhone(toPhone);
+  await saveBotMessage(tenantId, phone ? '55' + phone : toPhone, 'out', message);
 }
 
 export async function sendWhatsAppMessageFromTenant(
@@ -311,7 +322,7 @@ async function handleListAppointments(tenantId: string, customerPhone: string): 
   });
 
   if (appointments.length === 0) {
-    await sendWhatsAppMessage(tenantId, customerPhone, 'Você não tem agendamentos futuros. 📅');
+    await sendAndLog(tenantId, customerPhone, 'Você não tem agendamentos futuros. 📅');
   } else {
     const list = appointments
       .map(
@@ -319,7 +330,7 @@ async function handleListAppointments(tenantId: string, customerPhone: string): 
           `#${a.id.slice(0, 8).toUpperCase()} - ${a.appointment_date.toLocaleDateString('pt-BR')} ${a.appointment_date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} - ${a.service?.name ?? '-'} - ${a.barber.name}`
       )
       .join('\n');
-    await sendWhatsAppMessage(tenantId, customerPhone, `📋 *Seus agendamentos:*\n${list}`);
+    await sendAndLog(tenantId, customerPhone, `📋 *Seus agendamentos:*\n${list}`);
   }
 
   await putBotSession(tenantId, customerPhone, 'INICIO', {});
@@ -328,7 +339,7 @@ async function handleListAppointments(tenantId: string, customerPhone: string): 
 async function handleCancelAppointment(tenantId: string, phone: string, text: string): Promise<void> {
   const code = text.replace(/CANCELAR\s*/i, '').trim().toUpperCase();
   if (!code) {
-    await sendWhatsAppMessage(tenantId, phone, 'Use: CANCELAR #código\nEx: CANCELAR A3F8K2');
+    await sendAndLog(tenantId, phone, 'Use: CANCELAR #código\nEx: CANCELAR A3F8K2');
     return;
   }
 
@@ -343,7 +354,7 @@ async function handleCancelAppointment(tenantId: string, phone: string, text: st
 
   const match = appointments.find((a) => a.id.slice(0, 8).toUpperCase() === code);
   if (!match) {
-    await sendWhatsAppMessage(tenantId, phone, 'Agendamento não encontrado. Verifique o código e tente novamente.');
+    await sendAndLog(tenantId, phone, 'Agendamento não encontrado. Verifique o código e tente novamente.');
     return;
   }
 
@@ -360,7 +371,7 @@ async function handleCancelAppointment(tenantId: string, phone: string, text: st
     }
   });
 
-  await sendWhatsAppMessage(tenantId, phone, '✅ Agendamento cancelado com sucesso.');
+  await sendAndLog(tenantId, phone, '✅ Agendamento cancelado com sucesso.');
   await putBotSession(tenantId, phone, 'INICIO', {});
 }
 
@@ -407,13 +418,13 @@ export async function handleIncomingMessage(
       last_activity_at: Date.now(),
       customer_name: (session.data as BotSessionData)?.customer_name,
     });
-    await sendWhatsAppMessage(tenantId, customerPhone, reply);
+    await sendAndLog(tenantId, customerPhone, reply);
     return;
   }
 
   // ----- Comandos globais (em qualquer estado) -----
   if (isAjuda(text)) {
-    await sendWhatsAppMessage(tenantId, customerPhone, getHelpMessage());
+    await sendAndLog(tenantId, customerPhone, getHelpMessage());
     const data = (session?.data ?? {}) as BotSessionData;
     await updateBotSessionState(tenantId, phone, session?.state ?? 'INICIO', {
       ...data,
@@ -426,7 +437,7 @@ export async function handleIncomingMessage(
     const data = (session?.data ?? {}) as BotSessionData;
     const keepData: BotSessionData = { customer_name: data.customer_name, last_activity_at: Date.now() };
     await putBotSession(tenantId, phone, 'INICIO', keepData as Record<string, unknown>);
-    await sendWhatsAppMessage(tenantId, customerPhone, getMenuMessage(businessName, keepData.customer_name));
+    await sendAndLog(tenantId, customerPhone, getMenuMessage(businessName, keepData.customer_name));
     return;
   }
 
@@ -441,11 +452,11 @@ export async function handleIncomingMessage(
       const barbers = tenant.barbers;
       const list = barbers.map((b, i) => `${i + 1}️⃣ ${b.name}`).join('\n');
       await putBotSession(tenantId, phone, 'AGUARDANDO_BARBEIRO', nextData as Record<string, unknown>);
-      await sendWhatsAppMessage(tenantId, customerPhone, `✂️ Remarcar — Com qual barbeiro?\n${list}\n0️⃣ Qualquer disponível`);
+      await sendAndLog(tenantId, customerPhone, `✂️ Remarcar — Com qual barbeiro?\n${list}\n0️⃣ Qualquer disponível`);
     } else {
       const list = tenant.services.map((s, i) => `${i + 1}️⃣ ${s.name} — R$ ${s.price}`).join('\n');
       await putBotSession(tenantId, phone, 'AGUARDANDO_SERVICO', nextData as Record<string, unknown>);
-      await sendWhatsAppMessage(tenantId, customerPhone, `✂️ Remarcar — Qual serviço?\n${list}`);
+      await sendAndLog(tenantId, customerPhone, `✂️ Remarcar — Qual serviço?\n${list}`);
     }
     return;
   }
@@ -724,7 +735,7 @@ export async function handleIncomingMessage(
   }
 
   await updateBotSessionState(tenantId, phone, nextState, nextData as Record<string, unknown>);
-  await sendWhatsAppMessage(tenantId, customerPhone, reply);
+  await sendAndLog(tenantId, customerPhone, reply);
 }
 
 /**
@@ -738,5 +749,5 @@ export async function sendWelcomeMessage(tenantId: string, customerPhone: string
   const businessName = tenant?.business_name || tenant?.name || 'Barbearia';
   const msg = getMenuMessage(businessName);
   await putBotSession(tenantId, normalizePhone(customerPhone), 'INICIO', { last_activity_at: Date.now() });
-  await sendWhatsAppMessage(tenantId, customerPhone, msg);
+  await sendAndLog(tenantId, customerPhone, msg);
 }

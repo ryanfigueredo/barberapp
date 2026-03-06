@@ -21,6 +21,8 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  const barberId = request.nextUrl.searchParams.get('barber_id')?.trim() || null;
+
   const [year, monthNum] = month.split('-').map(Number);
   const startDate = new Date(Date.UTC(year, monthNum - 1, 1));
   const endDate = new Date(Date.UTC(year, monthNum, 0, 23, 59, 59));
@@ -30,6 +32,7 @@ export async function GET(request: NextRequest) {
       tenant_id: tenant.id,
       appointment_date: { gte: startDate, lte: endDate },
       status: { notIn: ['cancelled'] },
+      ...(barberId ? { barber_id: barberId } : {}),
     },
     select: { appointment_date: true, status: true },
   });

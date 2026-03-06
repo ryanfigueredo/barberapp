@@ -10,7 +10,7 @@ interface Barber {
   active: boolean;
 }
 
-export default function BarbersPage() {
+export default function BarbeirosPage() {
   const [barbers, setBarbers] = useState<Barber[]>([]);
   const [loading, setLoading] = useState(true);
 

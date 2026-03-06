@@ -23,6 +23,8 @@ class CalendarViewController: UIViewController {
     private var allAppointments: [Appointment] = []
     private var monthDots: [String: Int] = [:]
     private var selectedBarberId: String?
+    /// Quando true, ao terminar loadAppointments em modo mês, apresenta o sheet do dia selecionado.
+    private var showDaySheetAfterLoad = false
 
     private let scrollView = UIScrollView()
     private let modeSegment = UISegmentedControl(items: ["Dia", "Semana", "Mês"])
@@ -116,6 +118,7 @@ class CalendarViewController: UIViewController {
         filterBar.onFilter = { [weak self] barberId in
             self?.selectedBarberId = barberId
             self?.filterBar.setSelectedBarberId(barberId)
+            self?.loadMonthDots()
             self?.loadAppointments()
         }
         NSLayoutConstraint.activate([
@@ -165,6 +168,7 @@ class CalendarViewController: UIViewController {
         monthGridView.onDaySelected = { [weak self] date in
             self?.selectedDate = date
             self?.updateSelectedDateLabel()
+            self?.showDaySheetAfterLoad = (self?.mode == .month)
             self?.loadAppointments()
         }
         monthGridView.onSwipeMonth = { [weak self] direction in
@@ -233,6 +237,10 @@ class CalendarViewController: UIViewController {
                 if case .success(let resp) = result {
                     self?.allAppointments = resp.appointments
                     self?.applyFilter()
+                    if self?.showDaySheetAfterLoad == true, self?.mode == .month {
+                        self?.showDaySheetAfterLoad = false
+                        self?.presentDayAppointmentsSheetIfNeeded()
+                    }
                 }
             }
         }
@@ -264,7 +272,11 @@ class CalendarViewController: UIViewController {
 
     private func loadMonthDots() {
         let month = dateFormatter.string(from: selectedDate).prefix(7)
-        ApiService.shared.fetch("/api/app/appointments/month?month=\(month)") { [weak self] (result: Result<MonthAppointmentsResponse, Error>) in
+        var path = "/api/app/appointments/month?month=\(month)"
+        if let barberId = selectedBarberId, !barberId.isEmpty {
+            path += "&barber_id=\(barberId)"
+        }
+        ApiService.shared.fetch(path) { [weak self] (result: Result<MonthAppointmentsResponse, Error>) in
             DispatchQueue.main.async {
                 if case .success(let resp) = result {
                     var dots: [String: Int] = [:]
@@ -294,7 +306,37 @@ class CalendarViewController: UIViewController {
     }
 
     @objc private func handleRefresh() {
+        loadMonthDots()
         loadAppointments()
+    }
+
+    private func presentDayAppointmentsSheetIfNeeded() {
+        let cal = Calendar.current
+        let dayAppointments = allAppointments.filter {
+            guard let d = ISO8601DateFormatter().date(from: $0.appointmentDate) else { return false }
+            return cal.isDate(d, inSameDayAs: selectedDate)
+        }
+        let sheet = DayAppointmentsSheetViewController(date: selectedDate, appointments: dayAppointments)
+        sheet.onSelectAppointment = { [weak self] appt in
+            self?.dismiss(animated: true) {
+                let detail = AppointmentDetailViewController(appointment: appt)
+                self?.navigationController?.pushViewController(detail, animated: true)
+            }
+        }
+        let nav = UINavigationController(rootViewController: sheet)
+        nav.modalPresentationStyle = .pageSheet
+        if let sheetCtrl = nav.sheetPresentationController {
+            sheetCtrl.detents = [.medium(), .large()]
+            sheetCtrl.prefersGrabberVisible = true
+        }
+        let appearance = UINavigationBarAppearance()
+        appearance.configureWithOpaqueBackground()
+        appearance.backgroundColor = BarberTheme.bg
+        appearance.titleTextAttributes = [.foregroundColor: BarberTheme.gold]
+        nav.navigationBar.standardAppearance = appearance
+        nav.navigationBar.scrollEdgeAppearance = appearance
+        nav.navigationBar.tintColor = BarberTheme.gold
+        present(nav, animated: true)
     }
 }
 
@@ -924,6 +966,108 @@ class AppointmentsDayListView: UIView {
         let appt = appointments[view.tag]
         let detail = AppointmentDetailViewController(appointment: appt)
         vc.navigationController?.pushViewController(detail, animated: true)
+    }
+}
+
+// MARK: - DayAppointmentsSheetViewController (sheet que sobe ao tocar no dia no mês)
+class DayAppointmentsSheetViewController: UIViewController {
+    var onSelectAppointment: ((Appointment) -> Void)?
+
+    private let date: Date
+    private let appointments: [Appointment]
+    private let tableView = UITableView(frame: .zero, style: .plain)
+    private let emptyLabel = UILabel()
+
+    init(date: Date, appointments: [Appointment]) {
+        self.date = date
+        self.appointments = appointments
+        super.init(nibName: nil, bundle: nil)
+    }
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = BarberTheme.bg
+
+        let fmt = DateFormatter()
+        fmt.dateFormat = "EEEE, d 'de' MMMM"
+        fmt.locale = Locale(identifier: "pt_BR")
+        title = fmt.string(from: date).capitalized
+
+        navigationItem.leftBarButtonItem = UIBarButtonItem(title: "Fechar", style: .plain, target: self, action: #selector(closeTapped))
+        navigationItem.leftBarButtonItem?.tintColor = BarberTheme.gold
+
+        tableView.backgroundColor = .clear
+        tableView.separatorColor = BarberTheme.border
+        tableView.register(AppointmentTimeBlockCell.self, forCellReuseIdentifier: "cell")
+        tableView.delegate = self
+        tableView.dataSource = self
+        tableView.rowHeight = UITableView.automaticDimension
+        tableView.estimatedRowHeight = 64
+        view.addSubview(tableView)
+        tableView.translatesAutoresizingMaskIntoConstraints = false
+
+        emptyLabel.text = "Nenhum agendamento neste dia"
+        emptyLabel.textColor = BarberTheme.textMuted
+        emptyLabel.font = .systemFont(ofSize: 15)
+        emptyLabel.textAlignment = .center
+        emptyLabel.isHidden = !appointments.isEmpty
+        view.addSubview(emptyLabel)
+        emptyLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        NSLayoutConstraint.activate([
+            tableView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            emptyLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            emptyLabel.centerYAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerYAnchor),
+        ])
+    }
+
+    @objc private func closeTapped() {
+        dismiss(animated: true)
+    }
+}
+
+extension DayAppointmentsSheetViewController: UITableViewDataSource, UITableViewDelegate {
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        appointments.count
+    }
+
+    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath) as! AppointmentTimeBlockCell
+        cell.configure(with: appointments[indexPath.row])
+        return cell
+    }
+
+    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
+        onSelectAppointment?(appointments[indexPath.row])
+    }
+}
+
+// Célula que embute um AppointmentTimeBlock para usar na tabela do sheet
+class AppointmentTimeBlockCell: UITableViewCell {
+    private let block = AppointmentTimeBlock()
+
+    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
+        super.init(style: style, reuseIdentifier: reuseIdentifier)
+        backgroundColor = .clear
+        selectionStyle = .none
+        contentView.addSubview(block)
+        block.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            block.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 6),
+            block.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+            block.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+            block.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -6),
+        ])
+    }
+    required init?(coder: NSCoder) { fatalError() }
+
+    func configure(with appt: Appointment) {
+        block.configure(with: appt)
     }
 }
 

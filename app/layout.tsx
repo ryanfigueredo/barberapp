@@ -23,7 +23,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pt-BR" className={`${playfair.variable} ${dmSans.variable}`}>
-      <body className="font-sans antialiased bg-[#0A0A0A] text-white">
+      <body className="font-sans antialiased text-white" style={{ backgroundColor: 'var(--barber-bg)' }}>
         {children}
       </body>
     </html>

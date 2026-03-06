@@ -1,17 +1,16 @@
-// BarberApp — Design Tokens (Dark luxury barbershop)
-// Ícones: SF Symbols nativos da Apple
+// BarberApp — Design Tokens (Dark luxury #141416 / #D9AE59)
 
 import UIKit
 
 enum BarberDesign {
-    static let gold = UIColor(red: 0.96, green: 0.77, blue: 0.09, alpha: 1)
-    static let goldDim = UIColor(red: 0.96, green: 0.77, blue: 0.09, alpha: 0.3)
-    static let background = UIColor(red: 0.04, green: 0.04, blue: 0.04, alpha: 1)   // #0A0A0A
-    static let surface = UIColor(red: 0.10, green: 0.10, blue: 0.10, alpha: 1)      // #1A1A1A
-    static let surfaceElevated = UIColor(red: 0.15, green: 0.15, blue: 0.15, alpha: 1)
+    static let gold = UIColor(red: 217/255, green: 174/255, blue: 89/255, alpha: 1)
+    static let goldDim = UIColor(red: 217/255, green: 174/255, blue: 89/255, alpha: 0.3)
+    static let background = UIColor(red: 20/255, green: 20/255, blue: 22/255, alpha: 1)   // #141416
+    static let surface = UIColor(white: 1, alpha: 0.06)
+    static let surfaceElevated = UIColor(white: 1, alpha: 0.08)
     static let textPrimary = UIColor.white
-    static let textSecondary = UIColor(white: 0.55, alpha: 1)
-    static let textMuted = UIColor(white: 0.35, alpha: 1)
+    static let textSecondary = UIColor(white: 1, alpha: 0.45)
+    static let textMuted = UIColor(white: 1, alpha: 0.35)
     static let success = UIColor(red: 0.2, green: 0.85, blue: 0.4, alpha: 1)
     static let warning = UIColor(red: 0.96, green: 0.6, blue: 0.1, alpha: 1)
     static let error = UIColor(red: 0.95, green: 0.27, blue: 0.27, alpha: 1)

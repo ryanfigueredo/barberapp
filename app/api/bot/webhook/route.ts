@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { handleIncomingMessage } from '@/lib/whatsapp-bot/barber-bot-handler';
 import { prisma } from '@/lib/prisma';
+import { saveBotMessage } from '@/lib/whatsapp-bot/save-bot-message';
 
 const META_VERIFY_TOKEN = process.env.META_VERIFY_TOKEN || 'barberapp-verify-2025';
 
@@ -72,6 +73,7 @@ export async function POST(request: NextRequest) {
           console.log('[Webhook] Processando — tenant:', tenant.id, 'from:', customerPhone, 'text:', text?.slice(0, 50));
 
           try {
+            await saveBotMessage(tenant.id, customerPhone, 'in', text, wamid);
             await handleIncomingMessage(tenant.id, customerPhone, text, wamid);
           } catch (err) {
             console.error('[Webhook] Erro ao processar mensagem:', err);

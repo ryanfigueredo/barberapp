@@ -1,3 +1,48 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Design system BarberApp — #141416 bg, #D9AE59 gold, dark by default */
+:root {
+  --barber-bg: #141416;
+  --barber-surface: rgba(255, 255, 255, 0.06);
+  --barber-surface-high: rgba(255, 255, 255, 0.08);
+  --barber-gold: #D9AE59;
+  --barber-gold-dim: rgba(217, 174, 89, 0.25);
+  --barber-gold-bg: rgba(217, 174, 89, 0.12);
+  --barber-text: #ffffff;
+  --barber-text-secondary: rgba(255, 255, 255, 0.45);
+  --barber-text-muted: rgba(255, 255, 255, 0.35);
+  --barber-border: rgba(255, 255, 255, 0.07);
+  --barber-radius: 14px;
+}
+
+@layer utilities {
+  @keyframes fade-slide-in {
+    from {
+      opacity: 0;
+      transform: translateY(-12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  .animate-fade-slide-in {
+    animation: fade-slide-in 0.25s ease-out;
+  }
+
+  @keyframes slide-up-from-bottom {
+    from {
+      opacity: 0;
+      transform: translateY(100%);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  .animate-slide-up-from-bottom {
+    animation: slide-up-from-bottom 0.3s ease-out;
+  }
+}

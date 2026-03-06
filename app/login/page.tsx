@@ -32,7 +32,7 @@ export default function LoginPage() {
         localStorage.setItem('user_role', data.user.role);
         localStorage.setItem('user_barber_name', data.user.barber?.name ?? '');
       }
-      router.push('/dashboard');
+      router.push('/inicio');
     } catch {
       setError('Erro de conexão');
     } finally {
@@ -41,17 +41,18 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center p-6">
+    <div className="min-h-screen flex items-center justify-center p-6" style={{ backgroundColor: 'var(--barber-bg)' }}>
       <div className="w-full max-w-md">
-        <h1 className="font-display text-3xl text-[#F5C518] text-center mb-2">
+        <h1 className="font-display text-3xl text-center mb-2" style={{ color: 'var(--barber-gold)' }}>
           BarberApp
         </h1>
-        <p className="text-white/60 text-center mb-8 font-body">
+        <p className="text-center mb-8 font-body" style={{ color: 'var(--barber-text-secondary)' }}>
           Faça login para acessar o dashboard
         </p>
         <form
           onSubmit={handleSubmit}
-          className="bg-[#1A1A1A] rounded-xl border border-white/5 p-8"
+          className="rounded-xl border border-white/5 p-8"
+          style={{ backgroundColor: 'var(--barber-surface-high)' }}
         >
           {error && (
             <div className="mb-4 p-3 rounded-lg bg-red-500/20 text-red-400 text-sm">
@@ -66,7 +67,8 @@ export default function LoginPage() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
-                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-[#F5C518]"
+                className="w-full px-4 py-3 border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-[var(--barber-gold)]"
+                style={{ backgroundColor: 'var(--barber-surface)' }}
                 placeholder="ryan@dmtn.com.br"
               />
             </div>
@@ -77,19 +79,21 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-[#F5C518]"
+                className="w-full px-4 py-3 border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-[var(--barber-gold)]"
+                style={{ backgroundColor: 'var(--barber-surface)' }}
               />
             </div>
           </div>
           <button
             type="submit"
             disabled={loading}
-            className="w-full mt-6 py-3 bg-[#F5C518] text-black font-semibold rounded-lg hover:bg-amber-400 transition disabled:opacity-50"
+            className="w-full mt-6 py-3 text-black font-semibold rounded-lg transition disabled:opacity-50"
+            style={{ backgroundColor: 'var(--barber-gold)' }}
           >
             {loading ? 'Entrando...' : 'Entrar'}
           </button>
         </form>
-        <p className="text-white/40 text-sm text-center mt-6">
+        <p className="text-sm text-center mt-6" style={{ color: 'var(--barber-text-muted)' }}>
           Demo: ryan@dmtn.com.br / admin123
         </p>
       </div>
