@@ -51,7 +51,39 @@ npm run dev
 Acesse: [http://localhost:3000](http://localhost:3000)
 
 - **Dashboard:** `/dashboard/login` — login com admin@barbearia-demo.com / admin123  
-- **Webhook WhatsApp:** `/api/bot/webhook` — configurar no Meta Developers
+- **Webhook WhatsApp:** `/api/webhook/meta` (ou `/api/bot/webhook`) — configurar no Meta Developers
+
+### 6. DynamoDB (sessões do bot WhatsApp)
+
+O bot usa **uma tabela** no DynamoDB para guardar sessões (estado da conversa por cliente). Crie no AWS Console ou via CLI:
+
+**Nome da tabela:** `barberapp-bot-sessions` (ou defina `DYNAMODB_TABLE_BOT_SESSIONS` no `.env`)
+
+**Chaves:**
+- Partition key: `pk` (String)
+- Sort key: `sk` (String)
+
+**TTL:** ative TTL no atributo `ttl` (Number, timestamp Unix) para expirar sessões em 30 min.
+
+**AWS CLI (uma linha):**
+
+```bash
+aws dynamodb create-table \
+  --table-name barberapp-bot-sessions \
+  --attribute-definitions AttributeName=pk,AttributeType=S AttributeName=sk,AttributeType=S \
+  --key-schema AttributeName=pk,KeyType=HASH AttributeName=sk,KeyType=RANGE \
+  --billing-mode PAY_PER_REQUEST
+```
+
+Depois, ative TTL na tabela:
+
+```bash
+aws dynamodb update-time-to-live \
+  --table-name barberapp-bot-sessions \
+  --time-to-live-specification "Enabled=true, AttributeName=ttl"
+```
+
+**Variáveis de ambiente** (já usadas pelo app): `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (ou credenciais via IAM role). Opcional: `DYNAMODB_TABLE_BOT_SESSIONS` se usar outro nome de tabela.
 
 ## APIs
 

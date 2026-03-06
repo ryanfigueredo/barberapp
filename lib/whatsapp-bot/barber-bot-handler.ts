@@ -1,29 +1,39 @@
 /**
  * BarberApp — WhatsApp Bot Handler
  * Máquina de estados para fluxo de agendamento via Meta Cloud API
- * Sessões em DynamoDB (TTL 30min)
+ * Sessões em DynamoDB (TTL 30 min, last_activity_at para timeout 20 min)
  */
 
 import { prisma } from '@/lib/prisma';
-import { getBotSession, putBotSession, updateBotSessionState } from '@/lib/dynamodb';
+import { getBotSession, putBotSession, updateBotSessionState, type BotSessionRecord } from '@/lib/dynamodb';
+
+// ============ CONSTANTS ============
+
+const SESSION_INACTIVITY_MS = 20 * 60 * 1000; // 20 min
 
 // ============ TYPES ============
 
 export type BotState =
   | 'INICIO'
+  | 'AGUARDANDO_NOME'
   | 'AGUARDANDO_SERVICO'
   | 'AGUARDANDO_BARBEIRO'
   | 'AGUARDANDO_DATA'
   | 'AGUARDANDO_SLOT'
   | 'AGUARDANDO_CONFIRMACAO'
+  | 'AGUARDANDO_REAGENDAMENTO'
+  | 'AGUARDANDO_RECOMECAR'
   | 'CONCLUIDO';
 
 export interface BotSessionData {
   service_id?: string;
-  barber_id?: string | null; // null = qualquer disponível
-  date?: string; // YYYY-MM-DD
+  barber_id?: string | null;
+  date?: string;
   slot_id?: string;
   customer_name?: string;
+  rescheduling_appointment_id?: string;
+  last_activity_at?: number;
+  expired_awaiting_reconfirm?: boolean;
 }
 
 export interface BotSession {
@@ -45,21 +55,26 @@ function formatDateBR(dateStr: string): string {
   return `${d}/${m}/${y}`;
 }
 
+function formatDateLongBR(dateStr: string, timeStr: string): string {
+  const d = new Date(dateStr + 'T12:00:00.000Z');
+  const weekday = d.toLocaleDateString('pt-BR', { weekday: 'long' });
+  const dayMonth = formatDateBR(dateStr);
+  return `${weekday.charAt(0).toUpperCase() + weekday.slice(1)}, ${dayMonth} às ${timeStr}`;
+}
+
+/** Aceita: hoje, amanhã, DD/MM, DD/MM/YYYY */
 function parseUserDate(input: string): string | null {
   const lower = input.toLowerCase().trim();
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  if (lower === 'hoje') {
-    return today.toISOString().slice(0, 10);
-  }
+  if (lower === 'hoje') return today.toISOString().slice(0, 10);
   if (lower === 'amanha' || lower === 'amanhã') {
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
     return tomorrow.toISOString().slice(0, 10);
   }
 
-  // Formato DD/MM ou DD/MM/YYYY
   const match = input.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/);
   if (match) {
     let [, day, month, year] = match;
@@ -74,6 +89,39 @@ function parseUserDate(input: string): string | null {
   return null;
 }
 
+function isGlobalBack(text: string): boolean {
+  const t = text.toLowerCase().trim();
+  return t === 'voltar' || t === 'menu' || t === '0';
+}
+
+function isRemarcar(text: string): boolean {
+  return text.toLowerCase().trim() === 'remarcar';
+}
+
+function isAjuda(text: string): boolean {
+  const t = text.toLowerCase().trim();
+  return t === 'ajuda' || t === '?';
+}
+
+function isConfirmYes(text: string): boolean {
+  const t = text.toLowerCase().trim();
+  return ['s', 'sim', 'yes', '1'].includes(t);
+}
+
+function isConfirmNo(text: string): boolean {
+  const t = text.toLowerCase().trim();
+  return ['n', 'nao', 'não', 'no', '2'].includes(t);
+}
+
+function getMenuMessage(businessName: string, customerName?: string | null): string {
+  const greeting = customerName ? `Olá, ${customerName}! ✂️` : `Olá! 👋 Bem-vindo à ${businessName}!`;
+  return `${greeting}\n\nO que você deseja?\n1️⃣ Agendar horário\n2️⃣ Ver meus agendamentos\n3️⃣ Cancelar agendamento\n4️⃣ Remarcar agendamento\n5️⃣ Falar com atendente`;
+}
+
+function getHelpMessage(): string {
+  return `📋 *Comandos disponíveis:*\n\n• *voltar* ou *menu* ou *0* — Voltar ao menu\n• *remarcar* — Iniciar remarcação mantendo serviço\n• *ajuda* ou *?* — Ver esta mensagem\n• *CANCELAR #código* — Cancelar um agendamento (ex: CANCELAR A3F8K2)`;
+}
+
 // ============ SEND WHATSAPP ============
 
 async function sendWhatsAppMessage(
@@ -82,10 +130,15 @@ async function sendWhatsAppMessage(
   message: string
 ): Promise<void> {
   const r = await sendWhatsAppMessageFromTenant(tenantId, toPhone, message);
-  if (!r.ok) throw new Error(r.error);
+  if (!r.ok) {
+    if (r.error === 'WhatsApp não configurado') {
+      console.warn('[BarberBot] Resposta não enviada (WhatsApp não configurado no tenant).');
+      return;
+    }
+    throw new Error(r.error);
+  }
 }
 
-/** Exportado para uso na API de envio (app admin / mobile). */
 export async function sendWhatsAppMessageFromTenant(
   tenantId: string,
   toPhone: string,
@@ -93,11 +146,10 @@ export async function sendWhatsAppMessageFromTenant(
 ): Promise<{ ok: boolean; error?: string }> {
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
-    select: { meta_phone_number_id: true, meta_access_token: true },
+    select: { meta_phone_number_id: true, meta_access_token: true, business_name: true, name: true },
   });
 
   if (!tenant?.meta_phone_number_id || !tenant?.meta_access_token) {
-    console.error('[BarberBot] Tenant sem WhatsApp configurado:', tenantId);
     return { ok: false, error: 'WhatsApp não configurado' };
   }
 
@@ -125,198 +177,13 @@ export async function sendWhatsAppMessageFromTenant(
 
   if (!res.ok) {
     const err = await res.text();
-    console.error('[BarberBot] Erro ao enviar mensagem:', res.status, err);
+    console.error('[BarberBot] Erro ao enviar:', res.status, err);
     return { ok: false, error: `WhatsApp API: ${res.status}` };
   }
   return { ok: true };
 }
 
-// ============ STATE HANDLERS ============
-
-export async function handleIncomingMessage(
-  tenantId: string,
-  customerPhone: string,
-  messageBody: string,
-  wamid?: string
-): Promise<void> {
-  const phone = normalizePhone(customerPhone);
-  const text = messageBody.trim();
-
-  let session = await getBotSession(tenantId, phone);
-  const tenant = await prisma.tenant.findUnique({
-    where: { id: tenantId },
-    include: { services: { where: { active: true } }, barbers: { where: { active: true } } },
-  });
-
-  if (!tenant) {
-    console.error('[BarberBot] Tenant não encontrado:', tenantId);
-    return;
-  }
-
-  const businessName = tenant.business_name || tenant.name;
-
-  // Comandos especiais (fora do fluxo)
-  if (text.toUpperCase() === 'CANCELAR' || text.toUpperCase().startsWith('CANCELAR ')) {
-    await handleCancelAppointment(tenantId, phone, text);
-    return;
-  }
-
-  // Iniciar ou continuar fluxo
-  if (!session) {
-    session = {
-      pk: '',
-      sk: 'session',
-      tenant_id: tenantId,
-      phone,
-      state: 'INICIO',
-      data: {},
-      expires_at: 0,
-      updated_at: 0,
-    };
-    await putBotSession(tenantId, phone, 'INICIO', {});
-  }
-
-  const state = session.state as BotState;
-  const data = (session.data || {}) as BotSessionData;
-
-  let reply = '';
-  let nextState: BotState = state;
-  let nextData = { ...data };
-
-  switch (state) {
-    case 'INICIO': {
-      const choice = text.replace(/\D/g, '');
-      if (choice === '1') {
-        const services = tenant.services;
-        const list = services
-          .map((s, i) => `${i + 1}️⃣ ${s.name} R$${s.price}`)
-          .join('\n');
-        reply = `Ótimo! Qual serviço você quer?\n${list}`;
-        nextState = 'AGUARDANDO_SERVICO';
-      } else if (choice === '2') {
-        await handleListAppointments(tenantId, phone);
-        return;
-      } else if (choice === '3') {
-        reply = 'Para cancelar, digite: CANCELAR [código]\nEx: CANCELAR 123';
-      } else if (choice === '4') {
-        reply = 'Em breve um atendente responderá. Aguarde!';
-      } else {
-        reply = `Olá! 👋 Bem-vindo à ${businessName}!\n\nO que você deseja?\n1️⃣ Agendar horário\n2️⃣ Ver meus agendamentos\n3️⃣ Cancelar agendamento\n4️⃣ Falar com atendente`;
-      }
-      break;
-    }
-
-    case 'AGUARDANDO_SERVICO': {
-      const idx = parseInt(text.replace(/\D/g, ''), 10);
-      const services = tenant.services;
-      if (idx >= 1 && idx <= services.length) {
-        const service = services[idx - 1];
-        nextData.service_id = service.id;
-        const barbers = tenant.barbers;
-        const list = barbers.map((b, i) => `${i + 1}️⃣ ${b.name}`).join('\n');
-        reply = `Com qual barbeiro?\n${list}\n0️⃣ Qualquer disponível`;
-        nextState = 'AGUARDANDO_BARBEIRO';
-      } else {
-        reply = 'Opção inválida. Escolha o número do serviço:\n' + services.map((s, i) => `${i + 1}️⃣ ${s.name}`).join('\n');
-      }
-      break;
-    }
-
-    case 'AGUARDANDO_BARBEIRO': {
-      const idx = parseInt(text.replace(/\D/g, ''), 10);
-      const barbers = tenant.barbers;
-      if (idx === 0) {
-        nextData.barber_id = null;
-      } else if (idx >= 1 && idx <= barbers.length) {
-        nextData.barber_id = barbers[idx - 1].id;
-      } else {
-        reply = 'Opção inválida. Escolha o número do barbeiro ou 0 para qualquer.';
-        break;
-      }
-      const today = new Date();
-      const next3 = [];
-      for (let i = 0; i < 3; i++) {
-        const d = new Date(today);
-        d.setDate(d.getDate() + i);
-        next3.push(d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' }));
-      }
-      reply = `Qual data? (ex: hoje, amanhã, 15/06)\nOu escolha:\n${next3.map((d, i) => `${i + 1}️⃣ ${d}`).join('\n')}`;
-      nextState = 'AGUARDANDO_DATA';
-      break;
-    }
-
-    case 'AGUARDANDO_DATA': {
-      let dateStr: string | null = null;
-      const choice = text.replace(/\D/g, '');
-      if (choice === '1' || choice === '2' || choice === '3') {
-        const today = new Date();
-        const idx = parseInt(choice, 10) - 1;
-        const d = new Date(today);
-        d.setDate(d.getDate() + idx);
-        dateStr = d.toISOString().slice(0, 10);
-      } else {
-        dateStr = parseUserDate(text);
-      }
-      if (dateStr) {
-        nextData.date = dateStr;
-        const slots = await getAvailableSlots(tenantId, nextData.barber_id ?? undefined, dateStr);
-        if (slots.length === 0) {
-          reply = `Não há horários disponíveis em ${formatDateBR(dateStr)}. Escolha outra data.`;
-        } else {
-          const list = slots.slice(0, 10).map((s, i) => `${i + 1}️⃣ ${s.time}`).join('\n');
-          reply = `Horários disponíveis em ${formatDateBR(dateStr)}:\n${list}`;
-          nextState = 'AGUARDANDO_SLOT';
-        }
-      } else {
-        reply = 'Data inválida. Use: hoje, amanhã ou DD/MM';
-      }
-      break;
-    }
-
-    case 'AGUARDANDO_SLOT': {
-      const slots = await getAvailableSlots(tenantId, nextData.barber_id ?? undefined, nextData.date!);
-      const idx = parseInt(text.replace(/\D/g, ''), 10);
-      if (idx >= 1 && idx <= slots.length) {
-        const slot = slots[idx - 1];
-        nextData.slot_id = slot.id;
-        const service = tenant.services.find((s) => s.id === nextData.service_id);
-        const barber = nextData.barber_id
-          ? tenant.barbers.find((b) => b.id === nextData.barber_id)
-          : tenant.barbers.find((b) => b.id === slot.barber_id);
-        reply = `Confirmado! ✅\n📋 Serviço: ${service?.name ?? '-'}\n💈 Barbeiro: ${barber?.name ?? '-'}\n📅 Data: ${formatDateBR(nextData.date!)}\n⏰ Horário: ${slot.time}\n\nConfirma? (S/N)`;
-        nextState = 'AGUARDANDO_CONFIRMACAO';
-      } else {
-        reply = 'Opção inválida. Escolha o número do horário.';
-      }
-      break;
-    }
-
-    case 'AGUARDANDO_CONFIRMACAO': {
-      const confirm = text.toLowerCase();
-      if (confirm === 's' || confirm === 'sim') {
-        const appointment = await createAppointment(tenantId, phone, nextData);
-        reply = `Agendamento confirmado! 🎉\nSeu código: #${appointment.id.slice(0, 8).toUpperCase()}\nTe esperamos! 💈\n\nPara cancelar: CANCELAR ${appointment.id.slice(0, 8).toUpperCase()}`;
-        nextState = 'CONCLUIDO';
-        nextData = {};
-      } else if (confirm === 'n' || confirm === 'nao' || confirm === 'não') {
-        reply = 'Agendamento cancelado. Deseja agendar novamente? Digite 1 para sim.';
-        nextState = 'INICIO';
-        nextData = {};
-      } else {
-        reply = 'Responda S para confirmar ou N para cancelar.';
-      }
-      break;
-    }
-
-    case 'CONCLUIDO':
-      reply = `Olá! 👋 Bem-vindo à ${businessName}!\n\nO que você deseja?\n1️⃣ Agendar horário\n2️⃣ Ver meus agendamentos\n3️⃣ Cancelar agendamento\n4️⃣ Falar com atendente`;
-      nextState = 'INICIO';
-      break;
-  }
-
-  await updateBotSessionState(tenantId, phone, nextState, nextData);
-  await sendWhatsAppMessage(tenantId, customerPhone, reply);
-}
+// ============ SLOTS & APPOINTMENTS (unchanged signatures, only called) ============
 
 async function getAvailableSlots(
   tenantId: string,
@@ -342,6 +209,27 @@ async function getAvailableSlots(
     barber_id: s.barber_id,
     time: s.start_time.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
   }));
+}
+
+/** Retorna até 3 próximas datas (YYYY-MM-DD) que tenham pelo menos um slot. */
+async function getNextDatesWithSlots(
+  tenantId: string,
+  barberId: string | undefined | null,
+  fromDateStr: string,
+  limit = 3
+): Promise<string[]> {
+  const result: string[] = [];
+  let d = new Date(fromDateStr + 'T12:00:00.000Z');
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  if (d < today) d = today;
+  for (let i = 0; i < 14 && result.length < limit; i++) {
+    const dateStr = d.toISOString().slice(0, 10);
+    const slots = await getAvailableSlots(tenantId, barberId, dateStr);
+    if (slots.length > 0) result.push(dateStr);
+    d.setDate(d.getDate() + 1);
+  }
+  return result;
 }
 
 async function createAppointment(
@@ -387,11 +275,33 @@ async function createAppointment(
   });
 }
 
+/** Cancela um agendamento e libera o slot (uso interno, ex.: remarcar). */
+async function cancelAppointmentById(tenantId: string, appointmentId: string): Promise<void> {
+  const appt = await prisma.appointment.findFirst({
+    where: { id: appointmentId, tenant_id: tenantId, status: { in: ['pending', 'confirmed'] } },
+    include: { slot: true },
+  });
+  if (!appt) return;
+  await prisma.$transaction(async (tx) => {
+    await tx.appointment.update({
+      where: { id: appt.id },
+      data: { status: 'cancelled' },
+    });
+    if (appt.slot_id) {
+      await tx.slot.update({
+        where: { id: appt.slot_id },
+        data: { status: 'available', appointment_id: null },
+      });
+    }
+  });
+}
+
 async function handleListAppointments(tenantId: string, customerPhone: string): Promise<void> {
+  const phoneNorm = normalizePhone(customerPhone);
   const appointments = await prisma.appointment.findMany({
     where: {
       tenant_id: tenantId,
-      customer_phone: { contains: customerPhone.replace(/\D/g, '') },
+      customer_phone: { contains: phoneNorm },
       status: { notIn: ['cancelled', 'no_show'] },
       appointment_date: { gte: new Date() },
     },
@@ -401,7 +311,7 @@ async function handleListAppointments(tenantId: string, customerPhone: string): 
   });
 
   if (appointments.length === 0) {
-    await sendWhatsAppMessage(tenantId, customerPhone, 'Você não tem agendamentos futuros.');
+    await sendWhatsAppMessage(tenantId, customerPhone, 'Você não tem agendamentos futuros. 📅');
   } else {
     const list = appointments
       .map(
@@ -409,7 +319,7 @@ async function handleListAppointments(tenantId: string, customerPhone: string): 
           `#${a.id.slice(0, 8).toUpperCase()} - ${a.appointment_date.toLocaleDateString('pt-BR')} ${a.appointment_date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} - ${a.service?.name ?? '-'} - ${a.barber.name}`
       )
       .join('\n');
-    await sendWhatsAppMessage(tenantId, customerPhone, `Seus agendamentos:\n${list}`);
+    await sendWhatsAppMessage(tenantId, customerPhone, `📋 *Seus agendamentos:*\n${list}`);
   }
 
   await putBotSession(tenantId, customerPhone, 'INICIO', {});
@@ -418,7 +328,7 @@ async function handleListAppointments(tenantId: string, customerPhone: string): 
 async function handleCancelAppointment(tenantId: string, phone: string, text: string): Promise<void> {
   const code = text.replace(/CANCELAR\s*/i, '').trim().toUpperCase();
   if (!code) {
-    await sendWhatsAppMessage(tenantId, phone, 'Use: CANCELAR [código]\nEx: CANCELAR ABC12345');
+    await sendWhatsAppMessage(tenantId, phone, 'Use: CANCELAR #código\nEx: CANCELAR A3F8K2');
     return;
   }
 
@@ -433,7 +343,7 @@ async function handleCancelAppointment(tenantId: string, phone: string, text: st
 
   const match = appointments.find((a) => a.id.slice(0, 8).toUpperCase() === code);
   if (!match) {
-    await sendWhatsAppMessage(tenantId, phone, 'Agendamento não encontrado. Verifique o código.');
+    await sendWhatsAppMessage(tenantId, phone, 'Agendamento não encontrado. Verifique o código e tente novamente.');
     return;
   }
 
@@ -450,12 +360,375 @@ async function handleCancelAppointment(tenantId: string, phone: string, text: st
     }
   });
 
-  await sendWhatsAppMessage(tenantId, phone, 'Agendamento cancelado com sucesso.');
+  await sendWhatsAppMessage(tenantId, phone, '✅ Agendamento cancelado com sucesso.');
   await putBotSession(tenantId, phone, 'INICIO', {});
 }
 
+// ============ MAIN HANDLER ============
+
+export async function handleIncomingMessage(
+  tenantId: string,
+  customerPhone: string,
+  messageBody: string,
+  _wamid?: string
+): Promise<void> {
+  const phone = normalizePhone(customerPhone);
+  const text = messageBody.trim();
+
+  let session = await getBotSession(tenantId, phone);
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    include: { services: { where: { active: true } }, barbers: { where: { active: true } } },
+  });
+
+  if (!tenant) {
+    console.error('[BarberBot] Tenant não encontrado:', tenantId);
+    return;
+  }
+
+  const businessName = tenant.business_name || tenant.name;
+
+  // ----- Comando global: CANCELAR -----
+  if (text.toUpperCase() === 'CANCELAR' || text.toUpperCase().startsWith('CANCELAR ')) {
+    await handleCancelAppointment(tenantId, customerPhone, text);
+    return;
+  }
+
+  // ----- Sessão expirada (20 min)? -----
+  const sessionRecord = session as { updated_at?: number; data?: BotSessionData } | null;
+  const rawLast =
+    (session?.data as BotSessionData | undefined)?.last_activity_at ??
+    (sessionRecord?.updated_at ? sessionRecord.updated_at * 1000 : 0);
+  const lastActivity: number = typeof rawLast === 'number' ? rawLast : 0;
+  if (session && Date.now() - lastActivity > SESSION_INACTIVITY_MS) {
+    const reply = 'Olá! Sua sessão anterior expirou. Quer recomeçar? (S/N)';
+    await putBotSession(tenantId, phone, 'INICIO', {
+      expired_awaiting_reconfirm: true,
+      last_activity_at: Date.now(),
+      customer_name: (session.data as BotSessionData)?.customer_name,
+    });
+    await sendWhatsAppMessage(tenantId, customerPhone, reply);
+    return;
+  }
+
+  // ----- Comandos globais (em qualquer estado) -----
+  if (isAjuda(text)) {
+    await sendWhatsAppMessage(tenantId, customerPhone, getHelpMessage());
+    const data = (session?.data ?? {}) as BotSessionData;
+    await updateBotSessionState(tenantId, phone, session?.state ?? 'INICIO', {
+      ...data,
+      last_activity_at: Date.now(),
+    });
+    return;
+  }
+
+  if (isGlobalBack(text)) {
+    const data = (session?.data ?? {}) as BotSessionData;
+    const keepData: BotSessionData = { customer_name: data.customer_name, last_activity_at: Date.now() };
+    await putBotSession(tenantId, phone, 'INICIO', keepData as Record<string, unknown>);
+    await sendWhatsAppMessage(tenantId, customerPhone, getMenuMessage(businessName, keepData.customer_name));
+    return;
+  }
+
+  if (isRemarcar(text)) {
+    const data = (session?.data ?? {}) as BotSessionData;
+    const nextData: BotSessionData = {
+      customer_name: data.customer_name,
+      service_id: data.service_id,
+      last_activity_at: Date.now(),
+    };
+    if (data.service_id) {
+      const barbers = tenant.barbers;
+      const list = barbers.map((b, i) => `${i + 1}️⃣ ${b.name}`).join('\n');
+      await putBotSession(tenantId, phone, 'AGUARDANDO_BARBEIRO', nextData as Record<string, unknown>);
+      await sendWhatsAppMessage(tenantId, customerPhone, `✂️ Remarcar — Com qual barbeiro?\n${list}\n0️⃣ Qualquer disponível`);
+    } else {
+      const list = tenant.services.map((s, i) => `${i + 1}️⃣ ${s.name} — R$ ${s.price}`).join('\n');
+      await putBotSession(tenantId, phone, 'AGUARDANDO_SERVICO', nextData as Record<string, unknown>);
+      await sendWhatsAppMessage(tenantId, customerPhone, `✂️ Remarcar — Qual serviço?\n${list}`);
+    }
+    return;
+  }
+
+  // ----- Iniciar sessão se não existir -----
+  if (!session) {
+    session = {
+      pk: '',
+      sk: 'session',
+      tenant_id: tenantId,
+      phone,
+      state: 'INICIO',
+      data: {},
+      expires_at: 0,
+      updated_at: 0,
+    } as BotSessionRecord;
+    await putBotSession(tenantId, phone, 'INICIO', { last_activity_at: Date.now() });
+  }
+
+  const state = session.state as BotState;
+  const data = (session.data || {}) as BotSessionData;
+  let reply = '';
+  let nextState: BotState = state;
+  let nextData: BotSessionData = { ...data, last_activity_at: Date.now() };
+
+  switch (state) {
+    case 'INICIO': {
+      if (data.expired_awaiting_reconfirm) {
+        if (isConfirmYes(text)) {
+          nextData = { customer_name: data.customer_name, last_activity_at: Date.now() };
+          delete nextData.expired_awaiting_reconfirm;
+          reply = getMenuMessage(businessName, nextData.customer_name);
+          nextState = 'INICIO';
+        } else if (isConfirmNo(text)) {
+          reply = 'Ok, quando quiser é só mandar uma mensagem. 👋';
+          nextData = { last_activity_at: Date.now() };
+          nextState = 'INICIO';
+          delete nextData.expired_awaiting_reconfirm;
+        } else {
+          reply = 'Responda S para recomeçar ou N para sair.';
+        }
+        break;
+      }
+
+      const choice = text.replace(/\D/g, '');
+      if (choice === '1') {
+        const services = tenant.services;
+        const list = services.map((s, i) => `${i + 1}️⃣ ${s.name} — R$ ${s.price}`).join('\n');
+        reply = `✂️ Qual serviço você quer?\n${list}`;
+        nextState = 'AGUARDANDO_SERVICO';
+      } else if (choice === '2') {
+        await handleListAppointments(tenantId, customerPhone);
+        return;
+      } else if (choice === '3') {
+        reply = 'Para cancelar, digite: CANCELAR #código\nEx: CANCELAR A3F8K2';
+      } else if (choice === '4') {
+        const appointments = await prisma.appointment.findMany({
+          where: {
+            tenant_id: tenantId,
+            customer_phone: { contains: phone },
+            status: { notIn: ['cancelled', 'no_show'] },
+            appointment_date: { gte: new Date() },
+          },
+          include: { barber: true, service: true },
+          orderBy: { appointment_date: 'asc' },
+          take: 5,
+        });
+        if (appointments.length === 0) {
+          reply = 'Você não tem agendamentos futuros para remarcar. Quer agendar um novo? Digite 1.';
+        } else {
+          const list = appointments
+            .map(
+              (a, i) =>
+                `${i + 1}️⃣ #${a.id.slice(0, 8).toUpperCase()} — ${a.appointment_date.toLocaleDateString('pt-BR')} ${a.appointment_date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} — ${a.service?.name ?? '-'} — ${a.barber.name}`
+            )
+            .join('\n');
+          reply = `📅 Qual agendamento deseja remarcar?\n${list}`;
+          nextState = 'AGUARDANDO_REAGENDAMENTO';
+        }
+      } else if (choice === '5') {
+        reply = 'Em breve um atendente responderá. Aguarde! 👋';
+      } else {
+        if (!data.customer_name && text.length > 0 && !/^[1-5]\s*$/.test(text)) {
+          reply = 'Como posso te chamar? (ou digite 1 para pular)';
+          nextState = 'AGUARDANDO_NOME';
+        } else {
+          reply = getMenuMessage(businessName, data.customer_name);
+        }
+      }
+      break;
+    }
+
+    case 'AGUARDANDO_NOME': {
+      const name = text.trim();
+      if (name === '1' || name === '') {
+        nextData.customer_name = 'Cliente';
+      } else {
+        nextData.customer_name = name;
+      }
+      reply = getMenuMessage(businessName, nextData.customer_name);
+      nextState = 'INICIO';
+      break;
+    }
+
+    case 'AGUARDANDO_SERVICO': {
+      const idx = parseInt(text.replace(/\D/g, ''), 10);
+      const services = tenant.services;
+      if (idx >= 1 && idx <= services.length) {
+        nextData.service_id = services[idx - 1].id;
+        const barbers = tenant.barbers;
+        const list = barbers.map((b, i) => `${i + 1}️⃣ ${b.name}`).join('\n');
+        reply = `👤 Com qual barbeiro?\n${list}\n0️⃣ Qualquer disponível`;
+        nextState = 'AGUARDANDO_BARBEIRO';
+      } else {
+        reply = `Opção inválida. Digite 1, 2 ou ${services.length}:\n${services.map((s, i) => `${i + 1}️⃣ ${s.name}`).join('\n')}`;
+      }
+      break;
+    }
+
+    case 'AGUARDANDO_BARBEIRO': {
+      const idx = parseInt(text.replace(/\D/g, ''), 10);
+      const barbers = tenant.barbers;
+      if (idx === 0) {
+        nextData.barber_id = null;
+      } else if (idx >= 1 && idx <= barbers.length) {
+        nextData.barber_id = barbers[idx - 1].id;
+      } else {
+        reply = `Opção inválida. Digite 0 ou 1 a ${barbers.length}:\n${barbers.map((b, i) => `${i + 1}️⃣ ${b.name}`).join('\n')}\n0️⃣ Qualquer disponível`;
+        break;
+      }
+      const today = new Date();
+      const next3 = [];
+      for (let i = 0; i < 3; i++) {
+        const d = new Date(today);
+        d.setDate(d.getDate() + i);
+        next3.push(d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' }));
+      }
+      reply = `📅 Qual data? (ex: hoje, amanhã, 15/06 ou 15/06/2025)\nOu:\n${next3.map((d, i) => `${i + 1}️⃣ ${d}`).join('\n')}`;
+      nextState = 'AGUARDANDO_DATA';
+      break;
+    }
+
+    case 'AGUARDANDO_DATA': {
+      let dateStr: string | null = null;
+      const choice = text.replace(/\D/g, '');
+      if (choice === '1' || choice === '2' || choice === '3') {
+        const today = new Date();
+        const idx = parseInt(choice, 10) - 1;
+        const d = new Date(today);
+        d.setDate(d.getDate() + idx);
+        dateStr = d.toISOString().slice(0, 10);
+      } else {
+        dateStr = parseUserDate(text);
+      }
+      if (dateStr) {
+        nextData.date = dateStr;
+        const slots = await getAvailableSlots(tenantId, nextData.barber_id ?? undefined, dateStr);
+        if (slots.length === 0) {
+          const nextDates = await getNextDatesWithSlots(tenantId, nextData.barber_id ?? undefined, dateStr);
+          if (nextDates.length > 0) {
+            const sug = nextDates.map((d, i) => `${i + 1}️⃣ ${formatDateBR(d)}`).join('\n');
+            reply = `Sem horários para ${formatDateBR(dateStr)}. Quer tentar outra data?\n${sug}`;
+          } else {
+            reply = `Sem horários para ${formatDateBR(dateStr)}. Tente outra data (ex: amanhã ou 15/06).`;
+          }
+        } else {
+          const list = slots.slice(0, 10).map((s, i) => `${i + 1}️⃣ ${s.time}`).join('\n');
+          reply = `⏰ Horários disponíveis em ${formatDateBR(dateStr)}:\n${list}`;
+          nextState = 'AGUARDANDO_SLOT';
+        }
+      } else {
+        reply = 'Data inválida. Use: hoje, amanhã, DD/MM ou DD/MM/AAAA';
+      }
+      break;
+    }
+
+    case 'AGUARDANDO_SLOT': {
+      const slots = await getAvailableSlots(tenantId, nextData.barber_id ?? undefined, nextData.date!);
+      const idx = parseInt(text.replace(/\D/g, ''), 10);
+      if (idx >= 1 && idx <= slots.length) {
+        const slot = slots[idx - 1];
+        nextData.slot_id = slot.id;
+        const service = tenant.services.find((s) => s.id === nextData.service_id);
+        const barber = nextData.barber_id
+          ? tenant.barbers.find((b) => b.id === nextData.barber_id)
+          : tenant.barbers.find((b) => b.id === slot.barber_id);
+        reply = `✅ *Resumo:*\n✂️ Serviço: ${service?.name ?? '-'}\n👤 Barbeiro: ${barber?.name ?? '-'}\n📅 Data: ${formatDateBR(nextData.date!)}\n⏰ Horário: ${slot.time}\n\nConfirma? (S/N)`;
+        nextState = 'AGUARDANDO_CONFIRMACAO';
+      } else {
+        reply = `Opção inválida. Digite 1 a ${slots.length}:\n${slots.slice(0, 10).map((s, i) => `${i + 1}️⃣ ${s.time}`).join('\n')}`;
+      }
+      break;
+    }
+
+    case 'AGUARDANDO_CONFIRMACAO': {
+      if (isConfirmYes(text)) {
+        const rescheduleId = nextData.rescheduling_appointment_id;
+        if (rescheduleId) {
+          await cancelAppointmentById(tenantId, rescheduleId);
+        }
+        const appointment = await createAppointment(tenantId, phone, nextData);
+        const slot = await prisma.slot.findUnique({
+          where: { id: nextData.slot_id! },
+          select: { start_time: true },
+        });
+        const timeStr = slot ? slot.start_time.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+        const service = tenant.services.find((s) => s.id === nextData.service_id);
+        const barber = nextData.barber_id
+          ? tenant.barbers.find((b) => b.id === nextData.barber_id)
+          : tenant.barbers[0];
+        const code = appointment.id.slice(0, 8).toUpperCase();
+
+        reply =
+          `✅ *Agendamento confirmado!*\n\n` +
+          `✂️ Serviço: ${service?.name ?? '-'}\n` +
+          `👤 Barbeiro: ${barber?.name ?? '-'}\n` +
+          `📅 Data: ${formatDateLongBR(nextData.date!, timeStr)}\n` +
+          `📍 ${businessName}\n\n` +
+          `Código: #${code}\n` +
+          `Para cancelar: CANCELAR #${code}`;
+
+        nextState = 'CONCLUIDO';
+        nextData = {};
+      } else if (isConfirmNo(text)) {
+        reply = 'Agendamento não realizado. Quer tentar de novo? Digite 1 para agendar.';
+        nextState = 'INICIO';
+        nextData = {};
+      } else {
+        reply = 'Responda S para confirmar ou N para cancelar.';
+      }
+      break;
+    }
+
+    case 'AGUARDANDO_REAGENDAMENTO': {
+      const appointments = await prisma.appointment.findMany({
+        where: {
+          tenant_id: tenantId,
+          customer_phone: { contains: phone },
+          status: { notIn: ['cancelled', 'no_show'] },
+          appointment_date: { gte: new Date() },
+        },
+        include: { barber: true, service: true },
+        orderBy: { appointment_date: 'asc' },
+        take: 5,
+      });
+      const idx = parseInt(text.replace(/\D/g, ''), 10);
+      if (idx >= 1 && idx <= appointments.length) {
+        const appt = appointments[idx - 1];
+        nextData.rescheduling_appointment_id = appt.id;
+        nextData.service_id = appt.service_id ?? undefined;
+        nextData.barber_id = appt.barber_id;
+        const today = new Date();
+        const next3 = [];
+        for (let i = 0; i < 3; i++) {
+          const d = new Date(today);
+          d.setDate(d.getDate() + i);
+          next3.push(d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' }));
+        }
+        reply = `📅 Nova data? (ex: hoje, amanhã, DD/MM)\n${next3.map((d, i) => `${i + 1}️⃣ ${d}`).join('\n')}`;
+        nextState = 'AGUARDANDO_DATA';
+      } else {
+        reply = `Opção inválida. Digite 1 a ${appointments.length}.`;
+      }
+      break;
+    }
+
+    case 'AGUARDANDO_RECOMECAR':
+      nextState = 'INICIO';
+      reply = getMenuMessage(businessName, data.customer_name);
+      break;
+
+    case 'CONCLUIDO':
+      reply = getMenuMessage(businessName, data.customer_name);
+      nextState = 'INICIO';
+      break;
+  }
+
+  await updateBotSessionState(tenantId, phone, nextState, nextData as Record<string, unknown>);
+  await sendWhatsAppMessage(tenantId, customerPhone, reply);
+}
+
 /**
- * Mensagem inicial ao receber primeira interação
+ * Mensagem inicial (ex.: primeira interação)
  */
 export async function sendWelcomeMessage(tenantId: string, customerPhone: string): Promise<void> {
   const tenant = await prisma.tenant.findUnique({
@@ -463,7 +736,7 @@ export async function sendWelcomeMessage(tenantId: string, customerPhone: string
     select: { business_name: true, name: true },
   });
   const businessName = tenant?.business_name || tenant?.name || 'Barbearia';
-  const msg = `Olá! 👋 Bem-vindo à ${businessName}!\n\nO que você deseja?\n1️⃣ Agendar horário\n2️⃣ Ver meus agendamentos\n3️⃣ Cancelar agendamento\n4️⃣ Falar com atendente`;
-  await putBotSession(tenantId, normalizePhone(customerPhone), 'INICIO', {});
+  const msg = getMenuMessage(businessName);
+  await putBotSession(tenantId, normalizePhone(customerPhone), 'INICIO', { last_activity_at: Date.now() });
   await sendWhatsAppMessage(tenantId, customerPhone, msg);
 }

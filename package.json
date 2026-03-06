@@ -12,7 +12,13 @@
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "bot:set-phone-id": "tsx scripts/set-tenant-phone-id.ts",
+    "bot:test-webhook": "tsx scripts/test-webhook-local.ts",
+    "bot:test-webhook:real": "PHONE_NUMBER_ID=983471751512371 tsx scripts/test-webhook-local.ts",
+    "bot:verify-webhook": "tsx scripts/verify-webhook-get.ts",
+    "bot:set-whatsapp": "tsx scripts/set-tenant-whatsapp.ts",
+    "bot:register-number": "tsx scripts/register-whatsapp-number.ts"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.450.0",
