@@ -1,10 +1,3 @@
-//
-//  ContentView.swift
-//  BarberApp
-//
-//  Fluxo: Splash → Onboarding (primeiro acesso) → Paywall se expirado, senão Dashboard/Login.
-//
-
 import SwiftUI
 
 struct ContentView: View {

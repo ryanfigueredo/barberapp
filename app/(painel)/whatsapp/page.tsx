@@ -214,10 +214,10 @@ export default function WhatsAppPage() {
 
   return (
     <div className="p-8">
-      <h1 className="font-display text-3xl text-[#F5C518] mb-2">WhatsApp</h1>
+      <h1 className="font-display text-3xl text-[#D9AE59] mb-2">WhatsApp</h1>
       <p className="text-white/60 mb-8 font-body">Um número geral ou um por barbeiro — você escolhe</p>
 
-      <div className="bg-[#1A1A1A] rounded-xl border border-white/5 p-6 mb-6">
+      <div className="bg-[#1C1C1E] rounded-xl border border-white/5 p-6 mb-6">
         <h2 className="font-display text-xl text-white mb-4">Números WhatsApp</h2>
         {connections.length === 0 && !showAddForm ? (
           <p className="text-white/50 mb-4">Nenhum número configurado. Adicione um número geral da barbearia ou um por barbeiro.</p>
@@ -226,7 +226,7 @@ export default function WhatsAppPage() {
             {connections.map((c) => (
               <li key={c.id} className="flex items-center justify-between py-2 border-b border-white/5 last:border-0">
                 <div>
-                  <span className="text-[#F5C518] font-medium">
+                  <span className="text-[#D9AE59] font-medium">
                     {c.barber ? c.barber.name : 'Geral (barbearia)'}
                   </span>
                   <span className="text-white/60 text-sm ml-2">
@@ -248,7 +248,7 @@ export default function WhatsAppPage() {
           <button
             type="button"
             onClick={() => setShowAddForm(true)}
-            className="px-4 py-2 rounded-lg bg-[#F5C518] text-black font-medium hover:bg-amber-400 transition"
+            className="px-4 py-2 rounded-lg bg-[#D9AE59] text-black font-medium hover:opacity-90 transition"
           >
             Adicionar número
           </button>
@@ -305,7 +305,7 @@ export default function WhatsAppPage() {
               <button
                 type="submit"
                 disabled={savingConnection}
-                className="px-4 py-2 rounded-lg bg-[#F5C518] text-black font-medium hover:bg-amber-400 transition disabled:opacity-50"
+                className="px-4 py-2 rounded-lg bg-[#D9AE59] text-black font-medium hover:opacity-90 transition disabled:opacity-50"
               >
                 {savingConnection ? 'Salvando...' : 'Salvar'}
               </button>
@@ -324,11 +324,11 @@ export default function WhatsAppPage() {
         </p>
       </div>
 
-      <div className="bg-[#1A1A1A] rounded-xl border border-white/5 p-6 mb-6">
+      <div className="bg-[#1C1C1E] rounded-xl border border-white/5 p-6 mb-6">
         <h2 className="font-display text-xl text-white mb-4">Status do Bot</h2>
         <div className="space-y-2">
           <p className="text-white/80">
-            Números ativos: <span className="text-[#F5C518]">{connections.length}</span>
+            Números ativos: <span className="text-[#D9AE59]">{connections.length}</span>
           </p>
           <p className="text-white/80">
             Bot configurado:{' '}
@@ -343,7 +343,7 @@ export default function WhatsAppPage() {
       </div>
 
       <div className="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="bg-[#1A1A1A] rounded-xl border border-white/5 overflow-hidden flex flex-col max-h-[500px]">
+        <div className="bg-[#1C1C1E] rounded-xl border border-white/5 overflow-hidden flex flex-col max-h-[500px]">
           <h2 className="font-display text-xl text-white p-4 border-b border-white/5">Conversas</h2>
           <div className="overflow-y-auto flex-1">
             {loadingConv ? (
@@ -376,7 +376,7 @@ export default function WhatsAppPage() {
                           setEditingNamePhone(c.customer_phone);
                           setEditingNameValue(c.display_name || '');
                         }}
-                        className="text-xs text-[#F5C518] hover:underline"
+                        className="text-xs text-[#D9AE59] hover:underline"
                       >
                         {c.display_name ? 'Editar nome' : 'Definir nome'}
                       </button>
@@ -388,7 +388,7 @@ export default function WhatsAppPage() {
           </div>
         </div>
 
-        <div className="lg:col-span-2 bg-[#1A1A1A] rounded-xl border border-white/5 overflow-hidden flex flex-col max-h-[500px]">
+        <div className="lg:col-span-2 bg-[#1C1C1E] rounded-xl border border-white/5 overflow-hidden flex flex-col max-h-[500px]">
           <div className="p-4 border-b border-white/5 flex items-center justify-between flex-wrap gap-2">
             <h2 className="font-display text-xl text-white">
               {selectedPhone
@@ -404,7 +404,7 @@ export default function WhatsAppPage() {
                     setEditingNamePhone(selectedPhone);
                     setEditingNameValue(c?.display_name || '');
                   }}
-                  className="text-sm text-[#F5C518] hover:underline"
+                  className="text-sm text-[#D9AE59] hover:underline"
                 >
                   Renomear cliente
                 </button>
@@ -413,7 +413,7 @@ export default function WhatsAppPage() {
                 <button
                   type="button"
                   onClick={refreshMessages}
-                  className="text-sm text-[#F5C518] hover:underline"
+                  className="text-sm text-[#D9AE59] hover:underline"
                 >
                   Atualizar
                 </button>
@@ -435,7 +435,7 @@ export default function WhatsAppPage() {
                 type="button"
                 onClick={saveContactName}
                 disabled={savingName}
-                className="px-3 py-2 rounded-lg bg-[#F5C518] text-black text-sm font-medium hover:bg-amber-400 disabled:opacity-50"
+                className="px-3 py-2 rounded-lg bg-[#D9AE59] text-black text-sm font-medium hover:opacity-90 disabled:opacity-50"
               >
                 {savingName ? 'Salvando...' : 'Salvar'}
               </button>
@@ -464,7 +464,7 @@ export default function WhatsAppPage() {
                   <div
                     className={`max-w-[85%] rounded-lg px-3 py-2 ${
                       m.direction === 'out' || m.is_bot
-                        ? 'bg-[#F5C518]/20 text-white'
+                        ? 'bg-[#D9AE59]/20 text-white'
                         : 'bg-white/10 text-white'
                     }`}
                   >

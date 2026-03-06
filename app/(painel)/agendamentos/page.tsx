@@ -56,10 +56,10 @@ function whatsAppUrl(phone: string): string {
 
 function statusClass(status: string): string {
   switch (status) {
-    case 'confirmed': return 'bg-blue-500/20 text-blue-400';
-    case 'pending': return 'bg-amber-500/20 text-amber-400';
-    case 'completed': return 'bg-green-500/20 text-green-400';
-    case 'cancelled': return 'bg-red-500/20 text-red-400';
+    case 'confirmed': return 'bg-barber-blue/20 text-barber-blue';
+    case 'pending': return 'bg-barber-warning/20 text-barber-warning';
+    case 'completed': return 'bg-barber-success/20 text-barber-success';
+    case 'cancelled': return 'bg-barber-danger/20 text-barber-danger';
     default: return 'bg-white/10 text-white/70';
   }
 }
@@ -155,14 +155,14 @@ export default function AgendamentosPage() {
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden p-8">
-      <h1 className="font-display text-3xl text-[#F5C518] mb-2 shrink-0">Agendamentos</h1>
+      <h1 className="font-display text-3xl text-barber-gold mb-2 shrink-0">Agendamentos</h1>
       <p className="text-white/60 mb-6 font-body shrink-0">Visualize e gerencie agendamentos</p>
 
       <div className="flex flex-wrap gap-2 mb-4 shrink-0">
         <button
           onClick={() => setViewMode('calendar')}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition ${
-            viewMode === 'calendar' ? 'bg-[#F5C518] text-black' : 'bg-white/10 text-white hover:bg-white/20'
+            viewMode === 'calendar' ? 'bg-barber-gold text-black' : 'bg-white/10 text-white hover:bg-white/20'
           }`}
         >
           <Calendar className="w-4 h-4" />
@@ -171,7 +171,7 @@ export default function AgendamentosPage() {
         <button
           onClick={() => setViewMode('week')}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition ${
-            viewMode === 'week' ? 'bg-[#F5C518] text-black' : 'bg-white/10 text-white hover:bg-white/20'
+            viewMode === 'week' ? 'bg-barber-gold text-black' : 'bg-white/10 text-white hover:bg-white/20'
           }`}
         >
           <CalendarDays className="w-4 h-4" />
@@ -180,7 +180,7 @@ export default function AgendamentosPage() {
         <button
           onClick={() => setViewMode('daily')}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition ${
-            viewMode === 'daily' ? 'bg-[#F5C518] text-black' : 'bg-white/10 text-white hover:bg-white/20'
+            viewMode === 'daily' ? 'bg-barber-gold text-black' : 'bg-white/10 text-white hover:bg-white/20'
           }`}
         >
           <Users className="w-4 h-4" />
@@ -188,18 +188,19 @@ export default function AgendamentosPage() {
         </button>
       </div>
 
+      <div key={viewMode} className="flex-1 min-h-0 flex flex-col overflow-hidden">
       {viewMode === 'calendar' && (
-        <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-[#1A1A1A] rounded-xl border border-white/5">
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-barber-card rounded-xl border border-white/5">
           {panelOpen && selectedDate && (
             <div className="shrink-0 mx-6 mt-6 mb-2 overflow-hidden animate-slide-up-from-bottom">
-              <div className="rounded-xl border border-[#F5C518]/30 bg-[#0A0A0A] shadow-xl shadow-black/40">
+              <div className="rounded-xl border border-barber-gold/30 bg-barber-black shadow-xl shadow-black/40">
                 <div className="p-4 flex items-center justify-between border-b border-white/10">
-                  <h2 className="font-display text-lg text-[#F5C518]">
+                  <h2 className="font-display text-lg text-barber-gold">
                     Agendamentos de {selectedDate.toLocaleDateString('pt-BR')}
                   </h2>
                   <button
                     onClick={() => setPanelOpen(false)}
-                    className="w-10 h-10 rounded-full flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 transition-all duration-200 hover:rotate-90 focus:outline-none focus:ring-2 focus:ring-[#F5C518]/50"
+                    className="w-10 h-10 rounded-full flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 transition-all duration-200 hover:rotate-90 focus:outline-none focus:ring-2 focus:ring-barber-gold/50"
                     aria-label="Fechar"
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -263,7 +264,7 @@ export default function AgendamentosPage() {
               </button>
               <button
                 onClick={() => setCalendarBaseDate(new Date())}
-                className="px-4 py-2 rounded-lg bg-[#F5C518] text-black font-medium hover:bg-amber-400 transition"
+                className="px-4 py-2 rounded-lg bg-barber-gold text-black font-medium hover:opacity-90 transition"
               >
                 Hoje
               </button>
@@ -295,16 +296,16 @@ export default function AgendamentosPage() {
                     className={`h-12 min-w-0 rounded-lg flex flex-col items-center justify-center transition text-sm
                       ${
                         isSelected
-                          ? 'bg-[#F5C518] text-black'
+                          ? 'bg-barber-gold text-black'
                           : isToday
-                          ? 'border border-[#F5C518] text-white'
+                          ? 'border border-barber-gold text-white'
                           : hasAppointments
                           ? 'bg-white/10 text-white hover:bg-white/20'
                           : 'text-white/60 hover:bg-white/5'
                       }`}
                   >
                     <span className="font-medium leading-tight">{d}</span>
-                    {hasAppointments && <span className="w-1.5 h-1.5 rounded-full bg-[#F5C518] mt-1" />}
+                    {hasAppointments && <span className="w-1.5 h-1.5 rounded-full bg-barber-gold mt-1" />}
                   </button>
                 );
               })}
@@ -314,7 +315,7 @@ export default function AgendamentosPage() {
       )}
 
       {viewMode === 'week' && (
-        <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-[#1A1A1A] rounded-xl border border-white/5">
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-barber-card rounded-xl border border-white/5">
           <div className="p-4 border-b border-white/5 flex items-center justify-between flex-wrap gap-4 shrink-0">
             <div className="flex items-center gap-2">
               <button
@@ -336,7 +337,7 @@ export default function AgendamentosPage() {
             </div>
             <button
               onClick={() => setWeekStart(getWeekStart(new Date()))}
-              className="px-4 py-2 rounded-lg bg-[#F5C518] text-black font-medium hover:bg-amber-400 transition"
+              className="px-4 py-2 rounded-lg bg-barber-gold text-black font-medium hover:opacity-90 transition"
             >
               Esta semana
             </button>
@@ -354,7 +355,7 @@ export default function AgendamentosPage() {
                 return (
                   <div
                     key={dateStr}
-                    className={`w-52 shrink-0 border-r border-white/5 last:border-r-0 flex flex-col ${isToday ? 'bg-[#F5C518]/10' : ''}`}
+                    className={`w-52 shrink-0 border-r border-white/5 last:border-r-0 flex flex-col ${isToday ? 'bg-barber-gold/10' : ''}`}
                   >
                     <div className="p-3 border-b border-white/5 text-center shrink-0">
                       <p className="text-white/60 text-xs uppercase">{weekDayNames[day.getDay()]}</p>
@@ -410,7 +411,7 @@ export default function AgendamentosPage() {
       )}
 
       {viewMode === 'daily' && (
-        <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-[#1A1A1A] rounded-xl border border-white/5">
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-barber-card rounded-xl border border-white/5">
           <div className="p-4 border-b border-white/5 flex items-center justify-between flex-wrap gap-4 shrink-0">
             <div className="flex items-center gap-2">
               <button
@@ -439,7 +440,7 @@ export default function AgendamentosPage() {
             </div>
             <button
               onClick={() => setDailyDate(new Date())}
-              className="px-4 py-2 rounded-lg bg-[#F5C518] text-black font-medium hover:bg-amber-400 transition"
+              className="px-4 py-2 rounded-lg bg-barber-gold text-black font-medium hover:opacity-90 transition"
             >
               Hoje
             </button>
@@ -449,12 +450,12 @@ export default function AgendamentosPage() {
               {appointmentsByBarber.map(({ barber, appointments }) => (
                 <div
                   key={barber.id}
-                  className="w-72 shrink-0 flex flex-col rounded-xl border border-white/10 bg-[#0A0A0A]/50 overflow-hidden"
+                  className="w-72 shrink-0 flex flex-col rounded-xl border border-white/10 bg-barber-black/80 overflow-hidden"
                 >
                   <div className="p-4 border-b border-white/10 flex items-center gap-2">
-                    <Users className="w-5 h-5 text-[#F5C518] shrink-0" />
+                    <Users className="w-5 h-5 text-barber-gold shrink-0" />
                     <div className="min-w-0">
-                      <h3 className="font-display text-base text-[#F5C518] truncate">{barber.name}</h3>
+                      <h3 className="font-display text-base text-barber-gold truncate">{barber.name}</h3>
                       <p className="text-white/50 text-xs">
                         {appointments.length} agendamento{appointments.length !== 1 ? 's' : ''}
                       </p>
@@ -509,9 +510,9 @@ export default function AgendamentosPage() {
               <div className="flex items-center justify-center py-24 text-white/50">Carregando...</div>
             )}
             {barbers.length === 0 && dailyAppointments.length > 0 && (
-              <div className="w-72 shrink-0 rounded-xl border border-white/10 bg-[#0A0A0A]/50 overflow-hidden">
+              <div className="w-72 shrink-0 rounded-xl border border-white/10 bg-barber-black/80 overflow-hidden">
                 <div className="p-4 border-b border-white/10">
-                  <h3 className="font-display text-base text-[#F5C518]">Agendamentos do dia</h3>
+                  <h3 className="font-display text-base text-barber-gold">Agendamentos do dia</h3>
                 </div>
                 <div className="p-3 space-y-2">
                   {dailyAppointments.map((a) => (
@@ -545,6 +546,7 @@ export default function AgendamentosPage() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

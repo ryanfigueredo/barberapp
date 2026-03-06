@@ -199,12 +199,12 @@ export default function ConfiguracoesPage() {
 
   return (
     <div className="p-8">
-      <h1 className="font-display text-3xl text-[#F5C518] mb-2">Configurações</h1>
+      <h1 className="font-display text-3xl text-[#D9AE59] mb-2">Configurações</h1>
       <p className="text-white/60 mb-8 font-body">Perfil da barbearia, barbeiros e acesso. Cada barbeiro tem seu login; o WhatsApp é um só e agenda para todos.</p>
 
       <div className="space-y-8 max-w-3xl">
         {/* API Key */}
-        <div className="bg-[#1A1A1A] rounded-xl border border-white/5 p-6">
+        <div className="bg-[#1C1C1E] rounded-xl border border-white/5 p-6">
           <h2 className="font-display text-xl text-white mb-4">API Key (acesso ao painel)</h2>
           <p className="text-white/60 text-sm mb-4">
             Use a api_key do tenant para autenticar. O dono (ex.: ryan@dmtn.com.br) e cada barbeiro têm seu próprio acesso.
@@ -215,7 +215,7 @@ export default function ConfiguracoesPage() {
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
               placeholder="Cole sua API Key aqui"
-              className="flex-1 min-w-[200px] px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-[#F5C518]"
+              className="flex-1 min-w-[200px] px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-[#D9AE59]"
             />
             <button
               type="button"
@@ -236,7 +236,7 @@ export default function ConfiguracoesPage() {
             </button>
             <button
               onClick={saveApiKey}
-              className="px-6 py-3 bg-[#F5C518] text-black font-semibold rounded-lg hover:bg-amber-400 transition"
+              className="px-6 py-3 bg-[#D9AE59] text-black font-semibold rounded-lg hover:opacity-90 transition"
             >
               Salvar
             </button>
@@ -244,7 +244,7 @@ export default function ConfiguracoesPage() {
         </div>
 
         {/* Perfil da barbearia (editável) */}
-        <div className="bg-[#1A1A1A] rounded-xl border border-white/5 p-6">
+        <div className="bg-[#1C1C1E] rounded-xl border border-white/5 p-6">
           <h2 className="font-display text-xl text-white mb-4">Perfil da barbearia</h2>
           <p className="text-white/60 text-sm mb-4">Alterações refletem no app (nome, horário, WhatsApp, etc.).</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
@@ -253,7 +253,7 @@ export default function ConfiguracoesPage() {
               <input
                 value={profileForm.name}
                 onChange={(e) => setProfileForm((f) => ({ ...f, name: e.target.value }))}
-                className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-white/10 text-white"
+                className="w-full px-3 py-2 rounded-lg bg-[#141416] border border-white/10 text-white"
                 placeholder="Nome"
               />
             </div>
@@ -262,7 +262,7 @@ export default function ConfiguracoesPage() {
               <input
                 value={profileForm.business_name}
                 onChange={(e) => setProfileForm((f) => ({ ...f, business_name: e.target.value }))}
-                className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-white/10 text-white"
+                className="w-full px-3 py-2 rounded-lg bg-[#141416] border border-white/10 text-white"
                 placeholder="Barbearia do Zé"
               />
             </div>
@@ -271,7 +271,7 @@ export default function ConfiguracoesPage() {
               <input
                 value={profileForm.address}
                 onChange={(e) => setProfileForm((f) => ({ ...f, address: e.target.value }))}
-                className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-white/10 text-white"
+                className="w-full px-3 py-2 rounded-lg bg-[#141416] border border-white/10 text-white"
                 placeholder="Rua, número, bairro"
               />
             </div>
@@ -281,7 +281,7 @@ export default function ConfiguracoesPage() {
                 type="time"
                 value={profileForm.opening_time}
                 onChange={(e) => setProfileForm((f) => ({ ...f, opening_time: e.target.value }))}
-                className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-white/10 text-white"
+                className="w-full px-3 py-2 rounded-lg bg-[#141416] border border-white/10 text-white"
               />
             </div>
             <div>
@@ -290,7 +290,7 @@ export default function ConfiguracoesPage() {
                 type="time"
                 value={profileForm.closing_time}
                 onChange={(e) => setProfileForm((f) => ({ ...f, closing_time: e.target.value }))}
-                className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-white/10 text-white"
+                className="w-full px-3 py-2 rounded-lg bg-[#141416] border border-white/10 text-white"
               />
             </div>
             <div>
@@ -301,7 +301,7 @@ export default function ConfiguracoesPage() {
                 max={120}
                 value={profileForm.slot_duration_minutes}
                 onChange={(e) => setProfileForm((f) => ({ ...f, slot_duration_minutes: Number(e.target.value) || 60 }))}
-                className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-white/10 text-white"
+                className="w-full px-3 py-2 rounded-lg bg-[#141416] border border-white/10 text-white"
               />
             </div>
             <div>
@@ -309,7 +309,7 @@ export default function ConfiguracoesPage() {
               <input
                 value={profileForm.whatsapp_phone}
                 onChange={(e) => setProfileForm((f) => ({ ...f, whatsapp_phone: e.target.value }))}
-                className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-white/10 text-white"
+                className="w-full px-3 py-2 rounded-lg bg-[#141416] border border-white/10 text-white"
                 placeholder="5521999999999"
               />
               <p className="text-white/40 text-xs mt-1">Um número para a barbearia; o bot agenda para todos os barbeiros.</p>
@@ -318,35 +318,35 @@ export default function ConfiguracoesPage() {
           <button
             onClick={saveProfile}
             disabled={savingProfile}
-            className="px-6 py-3 bg-[#F5C518] text-black font-semibold rounded-lg hover:bg-amber-400 transition disabled:opacity-50"
+            className="px-6 py-3 bg-[#D9AE59] text-black font-semibold rounded-lg hover:opacity-90 transition disabled:opacity-50"
           >
             {savingProfile ? 'Salvando...' : 'Salvar perfil'}
           </button>
         </div>
 
         {/* Barbeiros */}
-        <div className="bg-[#1A1A1A] rounded-xl border border-white/5 p-6">
+        <div className="bg-[#1C1C1E] rounded-xl border border-white/5 p-6">
           <h2 className="font-display text-xl text-white mb-4">Barbeiros</h2>
           <p className="text-white/60 text-sm mb-4">Cada barbeiro pode ter acesso próprio ao app. Crie e edite aqui.</p>
 
           {!showNewBarber ? (
             <button
               onClick={() => setShowNewBarber(true)}
-              className="mb-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#F5C518] text-black font-medium hover:bg-amber-400 transition"
+              className="mb-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#D9AE59] text-black font-medium hover:opacity-90 transition"
             >
               <Plus className="w-4 h-4" />
               Novo barbeiro
             </button>
           ) : (
             <div className="mb-6 p-4 bg-white/5 rounded-lg border border-white/10">
-              <h3 className="font-display text-[#F5C518] mb-3">Novo barbeiro</h3>
+              <h3 className="font-display text-[#D9AE59] mb-3">Novo barbeiro</h3>
               <div className="flex flex-wrap gap-4 items-end">
                 <div>
                   <label className="block text-white/60 text-sm mb-1">Nome</label>
                   <input
                     value={barberForm.name}
                     onChange={(e) => setBarberForm((f) => ({ ...f, name: e.target.value }))}
-                    className="w-48 px-3 py-2 rounded-lg bg-[#0A0A0A] border border-white/10 text-white"
+                    className="w-48 px-3 py-2 rounded-lg bg-[#141416] border border-white/10 text-white"
                     placeholder="Nome do barbeiro"
                   />
                 </div>
@@ -355,14 +355,14 @@ export default function ConfiguracoesPage() {
                   <input
                     value={barberForm.phone}
                     onChange={(e) => setBarberForm((f) => ({ ...f, phone: e.target.value }))}
-                    className="w-40 px-3 py-2 rounded-lg bg-[#0A0A0A] border border-white/10 text-white"
+                    className="w-40 px-3 py-2 rounded-lg bg-[#141416] border border-white/10 text-white"
                     placeholder="21999999999"
                   />
                 </div>
                 <button
                   onClick={createBarber}
                   disabled={savingBarber || !barberForm.name.trim()}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#F5C518] text-black font-medium hover:bg-amber-400 disabled:opacity-50"
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#D9AE59] text-black font-medium hover:opacity-90 disabled:opacity-50"
                 >
                   <Check className="w-4 h-4" />
                   Salvar
@@ -392,7 +392,7 @@ export default function ConfiguracoesPage() {
                           <input
                             value={editBarberForm.name}
                             onChange={(e) => setEditBarberForm((f) => ({ ...f, name: e.target.value }))}
-                            className="w-48 px-3 py-2 rounded-lg bg-[#0A0A0A] border border-white/10 text-white"
+                            className="w-48 px-3 py-2 rounded-lg bg-[#141416] border border-white/10 text-white"
                           />
                         </div>
                         <div>
@@ -400,7 +400,7 @@ export default function ConfiguracoesPage() {
                           <input
                             value={editBarberForm.phone}
                             onChange={(e) => setEditBarberForm((f) => ({ ...f, phone: e.target.value }))}
-                            className="w-40 px-3 py-2 rounded-lg bg-[#0A0A0A] border border-white/10 text-white"
+                            className="w-40 px-3 py-2 rounded-lg bg-[#141416] border border-white/10 text-white"
                           />
                         </div>
                         <label className="flex items-center gap-2 cursor-pointer">
@@ -417,7 +417,7 @@ export default function ConfiguracoesPage() {
                         <button
                           onClick={saveBarber}
                           disabled={savingBarber}
-                          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#F5C518] text-black font-medium disabled:opacity-50"
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#D9AE59] text-black font-medium disabled:opacity-50"
                         >
                           <Check className="w-4 h-4" />
                           Salvar
@@ -434,7 +434,7 @@ export default function ConfiguracoesPage() {
                   ) : (
                     <>
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center font-display text-[#F5C518]">
+                        <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center font-display text-[#D9AE59]">
                           {b.name.charAt(0)}
                         </div>
                         <div>

@@ -58,10 +58,10 @@ export default function SlotsPage() {
 
   return (
     <div className="p-8">
-      <h1 className="font-display text-3xl text-[#F5C518] mb-2">Slots</h1>
+      <h1 className="font-display text-3xl text-[#D9AE59] mb-2">Slots</h1>
       <p className="text-white/60 mb-8 font-body">Gere agenda semanal para os barbeiros</p>
 
-      <div className="bg-[#1A1A1A] rounded-xl border border-white/5 p-6 mb-8">
+      <div className="bg-[#1C1C1E] rounded-xl border border-white/5 p-6 mb-8">
         <h2 className="font-display text-xl text-white mb-4">Gerar slots da semana</h2>
         <p className="text-white/60 text-sm mb-6">
           Período: {startDate.toLocaleDateString('pt-BR')} a {endDate.toLocaleDateString('pt-BR')}
@@ -74,7 +74,7 @@ export default function SlotsPage() {
               key={b.id}
               onClick={() => handleGenerate(b.id)}
               disabled={generating}
-              className="px-6 py-3 bg-[#F5C518] text-black font-semibold rounded-lg hover:bg-amber-400 transition disabled:opacity-50"
+              className="px-6 py-3 bg-[#D9AE59] text-black font-semibold rounded-lg hover:opacity-90 transition disabled:opacity-50"
             >
               Gerar para {b.name}
             </button>

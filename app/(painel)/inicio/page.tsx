@@ -59,7 +59,7 @@ export default function InicioPage() {
 
   return (
     <div className="p-8">
-      <h1 className="font-display text-3xl text-[#F5C518] mb-2">Início</h1>
+      <h1 className="font-display text-3xl text-[var(--barber-gold)] mb-2">Início</h1>
       <p className="text-white/60 mb-8 font-body">Visão geral da barbearia</p>
 
       {loading ? (
@@ -67,59 +67,59 @@ export default function InicioPage() {
       ) : (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-            <div className="bg-[#1A1A1A] rounded-xl p-5 border border-white/5 flex items-start gap-4">
-              <div className="w-10 h-10 rounded-lg bg-[#F5C518]/20 flex items-center justify-center shrink-0">
-                <Calendar className="w-5 h-5 text-[#F5C518]" />
+            <div className="bg-[#1C1C1E] rounded-xl p-5 border border-white/5 flex items-start gap-4">
+              <div className="w-10 h-10 rounded-lg bg-[var(--barber-gold)]/20 flex items-center justify-center shrink-0">
+                <Calendar className="w-5 h-5 text-[var(--barber-gold)]" />
               </div>
               <div className="min-w-0">
                 <p className="text-white/60 text-xs font-medium uppercase tracking-wide">Hoje</p>
-                <p className="text-2xl font-display font-bold text-[#F5C518] mt-0.5">{stats?.today ?? 0}</p>
+                <p className="text-2xl font-display font-bold text-[var(--barber-gold)] mt-0.5">{stats?.today ?? 0}</p>
                 <p className="text-white/40 text-xs mt-0.5">agendamentos</p>
               </div>
             </div>
 
-            <div className="bg-[#1A1A1A] rounded-xl p-5 border border-white/5 flex items-start gap-4">
-              <div className="w-10 h-10 rounded-lg bg-[#F5C518]/20 flex items-center justify-center shrink-0">
-                <CalendarRange className="w-5 h-5 text-[#F5C518]" />
+            <div className="bg-[#1C1C1E] rounded-xl p-5 border border-white/5 flex items-start gap-4">
+              <div className="w-10 h-10 rounded-lg bg-[var(--barber-gold)]/20 flex items-center justify-center shrink-0">
+                <CalendarRange className="w-5 h-5 text-[var(--barber-gold)]" />
               </div>
               <div className="min-w-0">
                 <p className="text-white/60 text-xs font-medium uppercase tracking-wide">Esta semana</p>
-                <p className="text-2xl font-display font-bold text-[#F5C518] mt-0.5">{stats?.week ?? 0}</p>
+                <p className="text-2xl font-display font-bold text-[var(--barber-gold)] mt-0.5">{stats?.week ?? 0}</p>
                 <p className="text-white/40 text-xs mt-0.5">agendamentos</p>
               </div>
             </div>
 
-            <div className="bg-[#1A1A1A] rounded-xl p-5 border border-white/5 flex items-start gap-4">
-              <div className="w-10 h-10 rounded-lg bg-[#F5C518]/20 flex items-center justify-center shrink-0">
-                <Users className="w-5 h-5 text-[#F5C518]" />
+            <div className="bg-[#1C1C1E] rounded-xl p-5 border border-white/5 flex items-start gap-4">
+              <div className="w-10 h-10 rounded-lg bg-[var(--barber-gold)]/20 flex items-center justify-center shrink-0">
+                <Users className="w-5 h-5 text-[var(--barber-gold)]" />
               </div>
               <div className="min-w-0">
                 <p className="text-white/60 text-xs font-medium uppercase tracking-wide">Barbeiros</p>
-                <p className="text-2xl font-display font-bold text-[#F5C518] mt-0.5">{stats?.barbers ?? 0}</p>
+                <p className="text-2xl font-display font-bold text-[var(--barber-gold)] mt-0.5">{stats?.barbers ?? 0}</p>
                 <p className="text-white/40 text-xs mt-0.5">ativos</p>
               </div>
             </div>
 
-            <div className="bg-[#1A1A1A] rounded-xl p-5 border border-white/5 flex items-start gap-4">
-              <div className="w-10 h-10 rounded-lg bg-[#F5C518]/20 flex items-center justify-center shrink-0">
-                <Banknote className="w-5 h-5 text-[#F5C518]" />
+            <div className="bg-[#1C1C1E] rounded-xl p-5 border border-white/5 flex items-start gap-4">
+              <div className="w-10 h-10 rounded-lg bg-[var(--barber-gold)]/20 flex items-center justify-center shrink-0">
+                <Banknote className="w-5 h-5 text-[var(--barber-gold)]" />
               </div>
               <div className="min-w-0">
                 <p className="text-white/60 text-xs font-medium uppercase tracking-wide">Faturamento hoje</p>
-                <p className="text-xl font-display font-bold text-[#F5C518] mt-0.5">
+                <p className="text-xl font-display font-bold text-[var(--barber-gold)] mt-0.5">
                   {formatMoney(stats?.revenue_today ?? 0)}
                 </p>
                 <p className="text-white/40 text-xs mt-0.5">concluídos</p>
               </div>
             </div>
 
-            <div className="bg-[#1A1A1A] rounded-xl p-5 border border-white/5 flex items-start gap-4">
-              <div className="w-10 h-10 rounded-lg bg-[#F5C518]/20 flex items-center justify-center shrink-0">
-                <Banknote className="w-5 h-5 text-[#F5C518]" />
+            <div className="bg-[#1C1C1E] rounded-xl p-5 border border-white/5 flex items-start gap-4">
+              <div className="w-10 h-10 rounded-lg bg-[var(--barber-gold)]/20 flex items-center justify-center shrink-0">
+                <Banknote className="w-5 h-5 text-[var(--barber-gold)]" />
               </div>
               <div className="min-w-0">
                 <p className="text-white/60 text-xs font-medium uppercase tracking-wide">Faturamento semana</p>
-                <p className="text-xl font-display font-bold text-[#F5C518] mt-0.5">
+                <p className="text-xl font-display font-bold text-[var(--barber-gold)] mt-0.5">
                   {formatMoney(stats?.revenue_week ?? 0)}
                 </p>
                 <p className="text-white/40 text-xs mt-0.5">concluídos</p>
@@ -127,9 +127,9 @@ export default function InicioPage() {
             </div>
           </div>
 
-          <div className="bg-[#1A1A1A] rounded-xl border border-white/5 overflow-hidden mb-8">
+          <div className="bg-[#1C1C1E] rounded-xl border border-white/5 overflow-hidden mb-8">
             <div className="p-5 border-b border-white/5 flex items-center gap-2">
-              <Clock className="w-5 h-5 text-[#F5C518]" />
+              <Clock className="w-5 h-5 text-[var(--barber-gold)]" />
               <div>
                 <h2 className="font-display text-xl text-white">Próximos hoje</h2>
                 <p className="text-white/60 text-sm">Agendamentos do dia</p>
@@ -144,7 +144,7 @@ export default function InicioPage() {
                     key={a.id}
                     className="p-4 flex items-center gap-4 hover:bg-white/5 transition"
                   >
-                    <span className="text-[#F5C518] font-mono font-semibold text-sm w-12 shrink-0">
+                    <span className="text-[var(--barber-gold)] font-mono font-semibold text-sm w-12 shrink-0">
                       {formatTime(a.appointment_date)}
                     </span>
                     <div className="min-w-0 flex-1">
@@ -174,7 +174,7 @@ export default function InicioPage() {
           <div className="flex flex-wrap gap-3">
             <Link
               href="/agendamentos"
-              className="inline-flex items-center gap-2 px-6 py-3 bg-[#F5C518] text-black font-semibold rounded-lg hover:bg-amber-400 transition"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-[var(--barber-gold)] text-black font-semibold rounded-lg hover:opacity-90 transition"
             >
               <Calendar className="w-4 h-4" />
               Ver calendário e agendamentos

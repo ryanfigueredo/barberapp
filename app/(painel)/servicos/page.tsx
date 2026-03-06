@@ -101,7 +101,7 @@ export default function ServicosPage() {
 
   return (
     <div className="p-8">
-      <h1 className="font-display text-3xl text-[#F5C518] mb-2">Serviços</h1>
+      <h1 className="font-display text-3xl text-[#D9AE59] mb-2">Serviços</h1>
       <p className="text-white/60 mb-8 font-body">Preços e duração — alterações refletem no app e no bot</p>
 
       <div className="flex justify-end mb-6">
@@ -111,14 +111,14 @@ export default function ServicosPage() {
             setForm({ name: '', price: '', duration_minutes: '60', active: true });
             setEditingId(null);
           }}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#F5C518] text-black font-medium hover:bg-amber-400 transition"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#D9AE59] text-black font-medium hover:opacity-90 transition"
         >
           <Plus className="w-4 h-4" />
           Novo serviço
         </button>
       </div>
 
-      <div className="bg-[#1A1A1A] rounded-xl border border-white/5 overflow-hidden">
+      <div className="bg-[#1C1C1E] rounded-xl border border-white/5 overflow-hidden">
         {loading ? (
           <div className="p-12 text-center text-white/60">Carregando...</div>
         ) : services.length === 0 && !showNew ? (
@@ -127,14 +127,14 @@ export default function ServicosPage() {
           <div className="divide-y divide-white/5">
             {showNew && (
               <div className="p-6 bg-white/5 border-b border-white/10">
-                <h3 className="font-display text-[#F5C518] mb-4">Novo serviço</h3>
+                <h3 className="font-display text-[#D9AE59] mb-4">Novo serviço</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
                   <div>
                     <label className="block text-white/60 text-sm mb-1">Nome</label>
                     <input
                       value={form.name}
                       onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                      className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-white/10 text-white"
+                      className="w-full px-3 py-2 rounded-lg bg-[#141416] border border-white/10 text-white"
                       placeholder="Ex: Corte + Barba"
                     />
                   </div>
@@ -145,7 +145,7 @@ export default function ServicosPage() {
                       step="0.01"
                       value={form.price}
                       onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
-                      className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-white/10 text-white"
+                      className="w-full px-3 py-2 rounded-lg bg-[#141416] border border-white/10 text-white"
                       placeholder="0,00"
                     />
                   </div>
@@ -155,7 +155,7 @@ export default function ServicosPage() {
                       type="number"
                       value={form.duration_minutes}
                       onChange={(e) => setForm((f) => ({ ...f, duration_minutes: e.target.value }))}
-                      className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-white/10 text-white"
+                      className="w-full px-3 py-2 rounded-lg bg-[#141416] border border-white/10 text-white"
                       placeholder="60"
                     />
                   </div>
@@ -164,7 +164,7 @@ export default function ServicosPage() {
                   <button
                     onClick={createService}
                     disabled={saving || !form.name.trim()}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#F5C518] text-black font-medium hover:bg-amber-400 disabled:opacity-50"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#D9AE59] text-black font-medium hover:opacity-90 disabled:opacity-50"
                   >
                     <Check className="w-4 h-4" />
                     Salvar
@@ -192,7 +192,7 @@ export default function ServicosPage() {
                         <input
                           value={form.name}
                           onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                          className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-white/10 text-white"
+                          className="w-full px-3 py-2 rounded-lg bg-[#141416] border border-white/10 text-white"
                         />
                       </div>
                       <div>
@@ -202,7 +202,7 @@ export default function ServicosPage() {
                           step="0.01"
                           value={form.price}
                           onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
-                          className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-white/10 text-white"
+                          className="w-full px-3 py-2 rounded-lg bg-[#141416] border border-white/10 text-white"
                         />
                       </div>
                       <div>
@@ -211,7 +211,7 @@ export default function ServicosPage() {
                           type="number"
                           value={form.duration_minutes}
                           onChange={(e) => setForm((f) => ({ ...f, duration_minutes: e.target.value }))}
-                          className="w-full px-3 py-2 rounded-lg bg-[#0A0A0A] border border-white/10 text-white"
+                          className="w-full px-3 py-2 rounded-lg bg-[#141416] border border-white/10 text-white"
                         />
                       </div>
                       <div className="flex items-end gap-2">
@@ -230,7 +230,7 @@ export default function ServicosPage() {
                       <button
                         onClick={saveEdit}
                         disabled={saving}
-                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#F5C518] text-black font-medium hover:bg-amber-400 disabled:opacity-50"
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#D9AE59] text-black font-medium hover:opacity-90 disabled:opacity-50"
                       >
                         <Check className="w-4 h-4" />
                         Salvar
@@ -251,7 +251,7 @@ export default function ServicosPage() {
                       <p className="text-white/60 text-sm">{s.duration_minutes} min</p>
                     </div>
                     <div className="flex items-center gap-4">
-                      <span className="font-display text-xl text-[#F5C518]">
+                      <span className="font-display text-xl text-[#D9AE59]">
                         R$ {Number(s.price).toFixed(2)}
                       </span>
                       <span

@@ -29,10 +29,10 @@ export default function BarbeirosPage() {
 
   return (
     <div className="p-8">
-      <h1 className="font-display text-3xl text-[#F5C518] mb-2">Barbeiros</h1>
+      <h1 className="font-display text-3xl text-[#D9AE59] mb-2">Barbeiros</h1>
       <p className="text-white/60 mb-8 font-body">Gerencie os barbeiros da barbearia</p>
 
-      <div className="bg-[#1A1A1A] rounded-xl border border-white/5 overflow-hidden">
+      <div className="bg-[#1C1C1E] rounded-xl border border-white/5 overflow-hidden">
         {loading ? (
           <div className="p-12 text-center text-white/60">Carregando...</div>
         ) : barbers.length === 0 ? (
@@ -45,7 +45,7 @@ export default function BarbeirosPage() {
                 className="p-6 flex items-center justify-between hover:bg-white/5 transition"
               >
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center font-display text-lg text-[#F5C518]">
+                  <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center font-display text-lg text-[#D9AE59]">
                     {b.name.charAt(0)}
                   </div>
                   <div>

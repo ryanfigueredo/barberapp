@@ -7,15 +7,15 @@ export const metadata = {
 
 export default function PoliticaDePrivacidadePage() {
   return (
-    <main className="min-h-screen bg-[#0A0A0A] text-white">
+    <main className="min-h-screen bg-[#141416] text-white">
       <div className="max-w-3xl mx-auto px-6 py-12">
         <Link
           href="/"
-          className="inline-flex items-center text-[#F5C518] hover:text-amber-400 transition mb-8"
+          className="inline-flex items-center text-[#D9AE59] hover:opacity-90 transition mb-8"
         >
           ← Voltar
         </Link>
-        <h1 className="text-3xl font-bold font-['Playfair_Display'] text-[#F5C518] mb-2">
+        <h1 className="text-3xl font-bold font-['Playfair_Display'] text-[#D9AE59] mb-2">
           Política de Privacidade
         </h1>
         <p className="text-white/70 text-sm mb-10">BarberApp — Sistema de Agendamento</p>
@@ -94,7 +94,7 @@ export default function PoliticaDePrivacidadePage() {
         </p>
         <Link
           href="/"
-          className="inline-block mt-6 px-6 py-3 bg-[#F5C518] text-black font-semibold rounded-lg hover:bg-amber-500 transition"
+          className="inline-block mt-6 px-6 py-3 bg-[#D9AE59] text-black font-semibold rounded-lg hover:opacity-90 transition"
         >
           Voltar ao início
         </Link>
