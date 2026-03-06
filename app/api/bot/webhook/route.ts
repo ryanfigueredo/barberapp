@@ -34,30 +34,53 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
+    console.log('[Webhook] POST body keys:', Object.keys(body), 'object:', body.object);
+
     if (body.object !== 'whatsapp_business_account') {
       return NextResponse.json({ error: 'Invalid object' }, { status: 400 });
     }
 
     const entries = body.entry || [];
+    if (entries.length === 0) {
+      console.log('[Webhook] POST sem entries (status/reaction?):', JSON.stringify(body).slice(0, 300));
+    }
     for (const entry of entries) {
       const changes = entry.changes || [];
       for (const change of changes) {
-        if (change.field !== 'messages') continue;
+        if (change.field !== 'messages') {
+          console.log('[Webhook] change.field ignorado:', change.field);
+          continue;
+        }
         const value = change.value;
 
         const messages = value.messages || [];
         const metadata = value.metadata || {};
         const phoneNumberId = metadata.phone_number_id != null ? String(metadata.phone_number_id) : undefined;
 
-        console.log('[Webhook] POST recebido — phone_number_id:', phoneNumberId, 'mensagens:', messages?.length);
+        console.log('[Webhook] POST recebido — phone_number_id:', phoneNumberId, 'mensagens:', messages?.length, 'metadata:', JSON.stringify(metadata));
 
-        const connection = await prisma.tenantWhatsApp.findUnique({
+        let connection = await prisma.tenantWhatsApp.findUnique({
           where: { meta_phone_number_id: phoneNumberId },
           include: { tenant: true },
         });
 
+        if (!connection?.tenant && phoneNumberId) {
+          const legacyTenant = await prisma.tenant.findFirst({
+            where: { meta_phone_number_id: phoneNumberId },
+          });
+          if (legacyTenant) {
+            console.log('[Webhook] Usando Tenant legado (meta_phone_number_id no Tenant):', legacyTenant.id);
+            connection = {
+              id: '',
+              tenant_id: legacyTenant.id,
+              barber_id: null,
+              tenant: { id: legacyTenant.id, slug: legacyTenant.slug, name: legacyTenant.name },
+            } as { id: string; tenant_id: string; barber_id: string | null; tenant: { id: string; slug: string; name: string } };
+          }
+        }
+
         if (!connection?.tenant) {
-          console.warn('[Webhook] Conexão não encontrada para phone_number_id:', phoneNumberId);
+          console.warn('[Webhook] Conexão não encontrada para phone_number_id:', phoneNumberId, '— Verifique Tenant ou TenantWhatsApp no banco.');
           continue;
         }
 

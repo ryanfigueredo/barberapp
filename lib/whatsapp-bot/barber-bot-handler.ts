@@ -179,6 +179,19 @@ export async function sendWhatsAppMessageFromTenant(
   }
 
   if (!connection?.meta_phone_number_id || !connection?.meta_access_token) {
+    const legacyTenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { meta_phone_number_id: true, meta_access_token: true },
+    });
+    if (legacyTenant?.meta_phone_number_id && legacyTenant?.meta_access_token) {
+      connection = {
+        meta_phone_number_id: legacyTenant.meta_phone_number_id,
+        meta_access_token: legacyTenant.meta_access_token,
+      };
+    }
+  }
+
+  if (!connection?.meta_phone_number_id || !connection?.meta_access_token) {
     return { ok: false, error: 'WhatsApp não configurado' };
   }
 
