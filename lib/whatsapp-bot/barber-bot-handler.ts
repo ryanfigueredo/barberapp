@@ -506,20 +506,50 @@ export async function handleIncomingMessage(
     return;
   }
 
-  // ----- Iniciar sessão se não existir -----
-  if (!session) {
-    session = {
-      pk: '',
-      sk: 'session',
+ // ----- Iniciar sessão se não existir -----
+if (!session) {
+  // Verifica se o cliente já está cadastrado pelo telefone
+  const existingCustomer = await prisma.appointment.findFirst({
+    where: {
       tenant_id: tenantId,
-      phone,
-      state: 'INICIO',
-      data: {},
-      expires_at: 0,
-      updated_at: 0,
-    } as BotSessionRecord;
-    await putBotSession(tenantId, phone, 'INICIO', { last_activity_at: Date.now(), connection_barber_id: defaultBarberId ?? undefined });
+      customer_phone: { contains: phone },
+    },
+    orderBy: { created_at: 'desc' },
+    select: { customer_name: true },
+  });
+
+  const knownName = existingCustomer?.customer_name ?? null;
+
+  session = {
+    pk: '',
+    sk: 'session',
+    tenant_id: tenantId,
+    phone,
+    state: 'INICIO',
+    data: {},
+    expires_at: 0,
+    updated_at: 0,
+  } as BotSessionRecord;
+
+  if (knownName && knownName !== 'Cliente WhatsApp') {
+    // Cliente já cadastrado — saudação personalizada e vai direto ao menu
+    await putBotSession(tenantId, phone, 'INICIO', {
+      last_activity_at: Date.now(),
+      connection_barber_id: defaultBarberId ?? undefined,
+      customer_name: knownName,
+    });
+    await sendAndLog(tenantId, customerPhone, getMenuMessage(businessName, knownName), defaultBarberId ?? undefined);
+    return;
+  } else {
+    // Cliente novo — pede o nome
+    await putBotSession(tenantId, phone, 'AGUARDANDO_NOME', {
+      last_activity_at: Date.now(),
+      connection_barber_id: defaultBarberId ?? undefined,
+    });
+    await sendAndLog(tenantId, customerPhone, `Olá! 👋 Bem-vindo à *${businessName}*!\n\nComo posso te chamar?`, defaultBarberId ?? undefined);
+    return;
   }
+}
 
   const state = session.state as BotState;
   const data = (session.data || {}) as BotSessionData;
