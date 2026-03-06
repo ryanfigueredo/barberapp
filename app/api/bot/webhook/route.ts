@@ -51,14 +51,18 @@ export async function POST(request: NextRequest) {
 
         console.log('[Webhook] POST recebido — phone_number_id:', phoneNumberId, 'mensagens:', messages?.length);
 
-        const tenant = await prisma.tenant.findFirst({
+        const connection = await prisma.tenantWhatsApp.findUnique({
           where: { meta_phone_number_id: phoneNumberId },
+          include: { tenant: true },
         });
 
-        if (!tenant) {
-          console.warn('[Webhook] Tenant não encontrado para phone_number_id:', phoneNumberId, '— Confira se o tenant no banco tem meta_phone_number_id =', phoneNumberId);
+        if (!connection?.tenant) {
+          console.warn('[Webhook] Conexão não encontrada para phone_number_id:', phoneNumberId);
           continue;
         }
+
+        const tenant = connection.tenant;
+        const defaultBarberId = connection.barber_id ?? undefined;
 
         for (const msg of messages) {
           if (msg.type !== 'text') {
@@ -70,11 +74,11 @@ export async function POST(request: NextRequest) {
           const wamid = msg.id;
 
           const customerPhone = '55' + String(from);
-          console.log('[Webhook] Processando — tenant:', tenant.id, 'from:', customerPhone, 'text:', text?.slice(0, 50));
+          console.log('[Webhook] Processando — tenant:', tenant.id, 'barber_id:', defaultBarberId, 'from:', customerPhone, 'text:', text?.slice(0, 50));
 
           try {
             await saveBotMessage(tenant.id, customerPhone, 'in', text, wamid);
-            await handleIncomingMessage(tenant.id, customerPhone, text, wamid);
+            await handleIncomingMessage(tenant.id, customerPhone, text, wamid, defaultBarberId);
           } catch (err) {
             console.error('[Webhook] Erro ao processar mensagem:', err);
           }

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 const nav = [
   { href: '/inicio', label: 'Início' },
@@ -14,6 +14,8 @@ const nav = [
   { href: '/configuracoes', label: 'Configurações', roles: ['owner', 'admin', 'super_admin'] },
 ];
 
+const PRICES_ALLOWED_USER = 'ryan@dmtn.com.br';
+
 export default function PainelLayout({
   children,
 }: {
@@ -21,12 +23,23 @@ export default function PainelLayout({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const [showPrices, setShowPrices] = useState(false);
 
   useEffect(() => {
     const hasApiKey = typeof window !== 'undefined' && !!localStorage.getItem('api_key');
     if (!hasApiKey) {
       router.replace('/login');
+      return;
     }
+    fetch('/api/me', {
+      credentials: 'include',
+      headers: { 'X-API-Key': localStorage.getItem('api_key') || '' },
+    })
+      .then((r) => r.json())
+      .then((data: { user?: { username?: string } }) => {
+        setShowPrices(data.user?.username === PRICES_ALLOWED_USER);
+      })
+      .catch(() => {});
   }, [router]);
 
   return (
@@ -60,6 +73,19 @@ export default function PainelLayout({
                 {item.label}
               </Link>
             ))}
+            {showPrices && (
+              <Link
+                href="/prices"
+                className={`block px-4 py-3 rounded-lg font-medium transition
+                  ${pathname === '/prices'
+                      ? 'text-[var(--barber-gold)]'
+                      : 'text-white/70 hover:text-white hover:bg-white/5'
+                  }`}
+                style={pathname === '/prices' ? { backgroundColor: 'var(--barber-gold-bg)' } : undefined}
+              >
+                Preços
+              </Link>
+            )}
           </nav>
           <div className="p-4 border-t border-white/5 shrink-0">
           <Link

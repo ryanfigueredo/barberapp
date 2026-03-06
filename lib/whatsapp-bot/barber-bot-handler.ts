@@ -35,6 +35,7 @@ export interface BotSessionData {
   rescheduling_appointment_id?: string;
   last_activity_at?: number;
   expired_awaiting_reconfirm?: boolean;
+  connection_barber_id?: string | null;
 }
 
 export interface BotSession {
@@ -128,9 +129,10 @@ function getHelpMessage(): string {
 async function sendWhatsAppMessage(
   tenantId: string,
   toPhone: string,
-  message: string
+  message: string,
+  connectionBarberId?: string | null
 ): Promise<void> {
-  const r = await sendWhatsAppMessageFromTenant(tenantId, toPhone, message);
+  const r = await sendWhatsAppMessageFromTenant(tenantId, toPhone, message, connectionBarberId);
   if (!r.ok) {
     if (r.error === 'WhatsApp não configurado') {
       console.warn('[BarberBot] Resposta não enviada (WhatsApp não configurado no tenant).');
@@ -143,9 +145,10 @@ async function sendWhatsAppMessage(
 async function sendAndLog(
   tenantId: string,
   toPhone: string,
-  message: string
+  message: string,
+  connectionBarberId?: string | null
 ): Promise<void> {
-  await sendWhatsAppMessage(tenantId, toPhone, message);
+  await sendWhatsAppMessage(tenantId, toPhone, message, connectionBarberId);
   const phone = normalizePhone(toPhone);
   await saveBotMessage(tenantId, phone ? '55' + phone : toPhone, 'out', message);
 }
@@ -153,19 +156,34 @@ async function sendAndLog(
 export async function sendWhatsAppMessageFromTenant(
   tenantId: string,
   toPhone: string,
-  message: string
+  message: string,
+  connectionBarberId?: string | null
 ): Promise<{ ok: boolean; error?: string }> {
-  const tenant = await prisma.tenant.findUnique({
-    where: { id: tenantId },
-    select: { meta_phone_number_id: true, meta_access_token: true, business_name: true, name: true },
+  const where: { tenant_id: string; barber_id?: string | null } = { tenant_id: tenantId };
+  if (connectionBarberId != null && connectionBarberId !== '') {
+    where.barber_id = connectionBarberId;
+  } else {
+    where.barber_id = null;
+  }
+
+  let connection = await prisma.tenantWhatsApp.findFirst({
+    where,
+    select: { meta_phone_number_id: true, meta_access_token: true },
   });
 
-  if (!tenant?.meta_phone_number_id || !tenant?.meta_access_token) {
+  if (!connection && (connectionBarberId == null || connectionBarberId === '')) {
+    connection = await prisma.tenantWhatsApp.findFirst({
+      where: { tenant_id: tenantId },
+      select: { meta_phone_number_id: true, meta_access_token: true },
+    });
+  }
+
+  if (!connection?.meta_phone_number_id || !connection?.meta_access_token) {
     return { ok: false, error: 'WhatsApp não configurado' };
   }
 
-  const phoneId = tenant.meta_phone_number_id;
-  const token = tenant.meta_access_token;
+  const phoneId = connection.meta_phone_number_id;
+  const token = connection.meta_access_token;
   const to = normalizePhone(toPhone).includes('55') ? toPhone.replace(/\D/g, '') : '55' + toPhone.replace(/\D/g, '');
 
   const url = `https://graph.facebook.com/v18.0/${phoneId}/messages`;
@@ -307,7 +325,7 @@ async function cancelAppointmentById(tenantId: string, appointmentId: string): P
   });
 }
 
-async function handleListAppointments(tenantId: string, customerPhone: string): Promise<void> {
+async function handleListAppointments(tenantId: string, customerPhone: string, connectionBarberId?: string | null): Promise<void> {
   const phoneNorm = normalizePhone(customerPhone);
   const appointments = await prisma.appointment.findMany({
     where: {
@@ -322,7 +340,7 @@ async function handleListAppointments(tenantId: string, customerPhone: string): 
   });
 
   if (appointments.length === 0) {
-    await sendAndLog(tenantId, customerPhone, 'Você não tem agendamentos futuros. 📅');
+    await sendAndLog(tenantId, customerPhone, 'Você não tem agendamentos futuros. 📅', connectionBarberId);
   } else {
     const list = appointments
       .map(
@@ -330,16 +348,21 @@ async function handleListAppointments(tenantId: string, customerPhone: string): 
           `#${a.id.slice(0, 8).toUpperCase()} - ${a.appointment_date.toLocaleDateString('pt-BR')} ${a.appointment_date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} - ${a.service?.name ?? '-'} - ${a.barber.name}`
       )
       .join('\n');
-    await sendAndLog(tenantId, customerPhone, `📋 *Seus agendamentos:*\n${list}`);
+    await sendAndLog(tenantId, customerPhone, `📋 *Seus agendamentos:*\n${list}`, connectionBarberId);
   }
 
-  await putBotSession(tenantId, customerPhone, 'INICIO', {});
+  await putBotSession(tenantId, customerPhone, 'INICIO', { connection_barber_id: connectionBarberId ?? undefined });
 }
 
-async function handleCancelAppointment(tenantId: string, phone: string, text: string): Promise<void> {
+async function handleCancelAppointment(
+  tenantId: string,
+  phone: string,
+  text: string,
+  connectionBarberId?: string | null
+): Promise<void> {
   const code = text.replace(/CANCELAR\s*/i, '').trim().toUpperCase();
   if (!code) {
-    await sendAndLog(tenantId, phone, 'Use: CANCELAR #código\nEx: CANCELAR A3F8K2');
+    await sendAndLog(tenantId, phone, 'Use: CANCELAR #código\nEx: CANCELAR A3F8K2', connectionBarberId);
     return;
   }
 
@@ -354,7 +377,7 @@ async function handleCancelAppointment(tenantId: string, phone: string, text: st
 
   const match = appointments.find((a) => a.id.slice(0, 8).toUpperCase() === code);
   if (!match) {
-    await sendAndLog(tenantId, phone, 'Agendamento não encontrado. Verifique o código e tente novamente.');
+    await sendAndLog(tenantId, phone, 'Agendamento não encontrado. Verifique o código e tente novamente.', connectionBarberId);
     return;
   }
 
@@ -371,8 +394,8 @@ async function handleCancelAppointment(tenantId: string, phone: string, text: st
     }
   });
 
-  await sendAndLog(tenantId, phone, '✅ Agendamento cancelado com sucesso.');
-  await putBotSession(tenantId, phone, 'INICIO', {});
+  await sendAndLog(tenantId, phone, '✅ Agendamento cancelado com sucesso.', connectionBarberId);
+  await putBotSession(tenantId, phone, 'INICIO', { connection_barber_id: connectionBarberId ?? undefined });
 }
 
 // ============ MAIN HANDLER ============
@@ -381,7 +404,8 @@ export async function handleIncomingMessage(
   tenantId: string,
   customerPhone: string,
   messageBody: string,
-  _wamid?: string
+  _wamid?: string,
+  defaultBarberId?: string | null
 ): Promise<void> {
   const phone = normalizePhone(customerPhone);
   const text = messageBody.trim();
@@ -398,10 +422,11 @@ export async function handleIncomingMessage(
   }
 
   const businessName = tenant.business_name || tenant.name;
+  const connectionBarberId = (session?.data as BotSessionData)?.connection_barber_id ?? defaultBarberId ?? null;
 
   // ----- Comando global: CANCELAR -----
   if (text.toUpperCase() === 'CANCELAR' || text.toUpperCase().startsWith('CANCELAR ')) {
-    await handleCancelAppointment(tenantId, customerPhone, text);
+    await handleCancelAppointment(tenantId, customerPhone, text, connectionBarberId);
     return;
   }
 
@@ -417,14 +442,15 @@ export async function handleIncomingMessage(
       expired_awaiting_reconfirm: true,
       last_activity_at: Date.now(),
       customer_name: (session.data as BotSessionData)?.customer_name,
+      connection_barber_id: connectionBarberId ?? undefined,
     });
-    await sendAndLog(tenantId, customerPhone, reply);
+    await sendAndLog(tenantId, customerPhone, reply, connectionBarberId);
     return;
   }
 
   // ----- Comandos globais (em qualquer estado) -----
   if (isAjuda(text)) {
-    await sendAndLog(tenantId, customerPhone, getHelpMessage());
+    await sendAndLog(tenantId, customerPhone, getHelpMessage(), connectionBarberId);
     const data = (session?.data ?? {}) as BotSessionData;
     await updateBotSessionState(tenantId, phone, session?.state ?? 'INICIO', {
       ...data,
@@ -435,9 +461,9 @@ export async function handleIncomingMessage(
 
   if (isGlobalBack(text)) {
     const data = (session?.data ?? {}) as BotSessionData;
-    const keepData: BotSessionData = { customer_name: data.customer_name, last_activity_at: Date.now() };
+    const keepData: BotSessionData = { customer_name: data.customer_name, last_activity_at: Date.now(), connection_barber_id: connectionBarberId ?? undefined };
     await putBotSession(tenantId, phone, 'INICIO', keepData as Record<string, unknown>);
-    await sendAndLog(tenantId, customerPhone, getMenuMessage(businessName, keepData.customer_name));
+    await sendAndLog(tenantId, customerPhone, getMenuMessage(businessName, keepData.customer_name), connectionBarberId);
     return;
   }
 
@@ -447,16 +473,17 @@ export async function handleIncomingMessage(
       customer_name: data.customer_name,
       service_id: data.service_id,
       last_activity_at: Date.now(),
+      connection_barber_id: connectionBarberId ?? undefined,
     };
     if (data.service_id) {
       const barbers = tenant.barbers;
       const list = barbers.map((b, i) => `${i + 1}️⃣ ${b.name}`).join('\n');
       await putBotSession(tenantId, phone, 'AGUARDANDO_BARBEIRO', nextData as Record<string, unknown>);
-      await sendAndLog(tenantId, customerPhone, `✂️ Remarcar — Com qual barbeiro?\n${list}\n0️⃣ Qualquer disponível`);
+      await sendAndLog(tenantId, customerPhone, `✂️ Remarcar — Com qual barbeiro?\n${list}\n0️⃣ Qualquer disponível`, connectionBarberId);
     } else {
       const list = tenant.services.map((s, i) => `${i + 1}️⃣ ${s.name} — R$ ${s.price}`).join('\n');
       await putBotSession(tenantId, phone, 'AGUARDANDO_SERVICO', nextData as Record<string, unknown>);
-      await sendAndLog(tenantId, customerPhone, `✂️ Remarcar — Qual serviço?\n${list}`);
+      await sendAndLog(tenantId, customerPhone, `✂️ Remarcar — Qual serviço?\n${list}`, connectionBarberId);
     }
     return;
   }
@@ -473,14 +500,14 @@ export async function handleIncomingMessage(
       expires_at: 0,
       updated_at: 0,
     } as BotSessionRecord;
-    await putBotSession(tenantId, phone, 'INICIO', { last_activity_at: Date.now() });
+    await putBotSession(tenantId, phone, 'INICIO', { last_activity_at: Date.now(), connection_barber_id: defaultBarberId ?? undefined });
   }
 
   const state = session.state as BotState;
   const data = (session.data || {}) as BotSessionData;
   let reply = '';
   let nextState: BotState = state;
-  let nextData: BotSessionData = { ...data, last_activity_at: Date.now() };
+  let nextData: BotSessionData = { ...data, last_activity_at: Date.now(), connection_barber_id: connectionBarberId ?? data.connection_barber_id };
 
   switch (state) {
     case 'INICIO': {
@@ -508,7 +535,7 @@ export async function handleIncomingMessage(
         reply = `✂️ Qual serviço você quer?\n${list}`;
         nextState = 'AGUARDANDO_SERVICO';
       } else if (choice === '2') {
-        await handleListAppointments(tenantId, customerPhone);
+        await handleListAppointments(tenantId, customerPhone, connectionBarberId);
         return;
       } else if (choice === '3') {
         reply = 'Para cancelar, digite: CANCELAR #código\nEx: CANCELAR A3F8K2';
@@ -735,19 +762,19 @@ export async function handleIncomingMessage(
   }
 
   await updateBotSessionState(tenantId, phone, nextState, nextData as Record<string, unknown>);
-  await sendAndLog(tenantId, customerPhone, reply);
+  await sendAndLog(tenantId, customerPhone, reply, connectionBarberId);
 }
 
 /**
  * Mensagem inicial (ex.: primeira interação)
  */
-export async function sendWelcomeMessage(tenantId: string, customerPhone: string): Promise<void> {
+export async function sendWelcomeMessage(tenantId: string, customerPhone: string, connectionBarberId?: string | null): Promise<void> {
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
     select: { business_name: true, name: true },
   });
   const businessName = tenant?.business_name || tenant?.name || 'Barbearia';
   const msg = getMenuMessage(businessName);
-  await putBotSession(tenantId, normalizePhone(customerPhone), 'INICIO', { last_activity_at: Date.now() });
-  await sendAndLog(tenantId, customerPhone, msg);
+  await putBotSession(tenantId, normalizePhone(customerPhone), 'INICIO', { last_activity_at: Date.now(), connection_barber_id: connectionBarberId ?? undefined });
+  await sendAndLog(tenantId, customerPhone, msg, connectionBarberId);
 }

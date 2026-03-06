@@ -44,9 +44,32 @@ model Tenant {
   slots                      Slot[]
   bot_messages               BotMessage[]
   message_usage              MessageUsage[]
+  whatsapp_connections       TenantWhatsApp[]
 
   created_at                 DateTime @default(now())
   updated_at                 DateTime @updatedAt
+}
+
+/// Múltiplos números WhatsApp por tenant: 1 geral (barber_id null) ou 1 por barbeiro
+model TenantWhatsApp {
+  id                    String   @id @default(uuid())
+  tenant_id             String
+  barber_id             String?  // null = número geral da barbearia
+
+  whatsapp_phone        String?
+  meta_phone_number_id  String   @unique
+  meta_access_token     String
+  meta_business_account_id String?
+  bot_configured        Boolean  @default(false)
+
+  tenant                Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  barber                Barber?  @relation(fields: [barber_id], references: [id], onDelete: SetNull)
+
+  created_at            DateTime @default(now())
+  updated_at            DateTime @updatedAt
+
+  @@index([tenant_id])
+  @@index([meta_phone_number_id])
 }
 
 model User {
@@ -73,6 +96,8 @@ model Barber {
   user         User?         // login deste barbeiro (opcional)
   slots        Slot[]
   appointments Appointment[]
+  whatsapp_connections TenantWhatsApp[]
+
   created_at   DateTime      @default(now())
 
   @@index([tenant_id])

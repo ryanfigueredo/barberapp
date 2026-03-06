@@ -8,6 +8,7 @@
 
 import SwiftUI
 import StoreKit
+import Combine
 
 // MARK: - Subscription Status
 enum SubscriptionStatus {
@@ -18,7 +19,6 @@ enum SubscriptionStatus {
 }
 
 // MARK: - Subscription Manager
-@MainActor
 class SubscriptionManager: ObservableObject {
     static let shared = SubscriptionManager()
 
@@ -31,9 +31,10 @@ class SubscriptionManager: ObservableObject {
     private let subscribedKey = "is_subscribed"
 
     init() {
-        Task { await refreshStatus() }
+        Task { @MainActor in await refreshStatus() }
     }
 
+    @MainActor
     func refreshStatus() async {
         isLoading = true
         defer { isLoading = false }
@@ -60,11 +61,13 @@ class SubscriptionManager: ObservableObject {
         }
     }
 
+    @MainActor
     func startTrial() {
         UserDefaults.standard.set(Date(), forKey: trialStartKey)
         status = .trial(daysRemaining: trialDays)
     }
 
+    @MainActor
     func purchase() async throws {
         let products = try await Product.products(for: [productID])
         guard let product = products.first else { return }
@@ -74,6 +77,7 @@ class SubscriptionManager: ObservableObject {
         }
     }
 
+    @MainActor
     func restorePurchases() async {
         try? await AppStore.sync()
         await refreshStatus()
