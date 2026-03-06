@@ -61,6 +61,11 @@ export async function putBotSession(
   const now = Math.floor(Date.now() / 1000);
   const expires_at = now + SESSION_TTL_SECONDS;
 
+  // Remove undefined values — DynamoDB não aceita undefined
+  const cleanData = Object.fromEntries(
+    Object.entries(data).filter(([, v]) => v !== undefined)
+  );
+
   await docClient.send(
     new PutCommand({
       TableName: BOT_SESSIONS_TABLE,
@@ -70,7 +75,7 @@ export async function putBotSession(
         tenant_id: tenantId,
         phone,
         state,
-        data,
+        data: cleanData,
         expires_at,
         updated_at: now,
         ttl: expires_at, // DynamoDB TTL attribute
