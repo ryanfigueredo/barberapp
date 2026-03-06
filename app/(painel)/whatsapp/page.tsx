@@ -31,6 +31,7 @@ interface Conversation {
   last_at: string;
   last_direction: string;
   count: number;
+  display_name?: string | null;
 }
 
 interface Message {
@@ -42,7 +43,9 @@ interface Message {
 }
 
 function formatPhone(phone: string) {
-  const d = phone.replace(/\D/g, '');
+  let d = phone.replace(/\D/g, '');
+  // Remove país 55 para exibir DDD corretamente: +55 (21) 99762-4873
+  if (d.startsWith('55') && d.length >= 12) d = d.slice(2);
   if (d.length >= 10) return `+55 (${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
   return phone;
 }
@@ -73,6 +76,9 @@ export default function WhatsAppPage() {
   });
   const [savingConnection, setSavingConnection] = useState(false);
   const [addError, setAddError] = useState('');
+  const [editingNamePhone, setEditingNamePhone] = useState<string | null>(null);
+  const [editingNameValue, setEditingNameValue] = useState('');
+  const [savingName, setSavingName] = useState(false);
 
   const apiHeaders = () => ({ 'X-API-Key': typeof localStorage !== 'undefined' ? localStorage.getItem('api_key') || '' : '' });
 
@@ -173,6 +179,38 @@ export default function WhatsAppPage() {
       setConnections((prev) => prev.filter((c) => c.id !== id));
     } catch {}
   };
+
+  const saveContactName = async () => {
+    if (!editingNamePhone || savingName) return;
+    setSavingName(true);
+    try {
+      const r = await fetch('/api/admin/whatsapp/contact-name', {
+        method: 'PUT',
+        headers: { ...apiHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customer_phone: editingNamePhone, display_name: editingNameValue.trim() || 'Cliente' }),
+      });
+      if (!r.ok) {
+        const data = await r.json();
+        alert(data.error || 'Erro ao salvar');
+        return;
+      }
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.customer_phone === editingNamePhone
+            ? { ...c, display_name: editingNameValue.trim() || 'Cliente' }
+            : c
+        )
+      );
+      setEditingNamePhone(null);
+      setEditingNameValue('');
+    } catch {
+      alert('Erro de conexão');
+    } finally {
+      setSavingName(false);
+    }
+  };
+
+  const getDisplayLabel = (c: Conversation) => c.display_name || formatPhone(c.customer_phone);
 
   return (
     <div className="p-8">
@@ -323,10 +361,26 @@ export default function WhatsAppPage() {
                         selectedPhone === c.customer_phone ? 'bg-white/10' : ''
                       }`}
                     >
-                      <p className="font-medium text-white">{formatPhone(c.customer_phone)}</p>
+                      <p className="font-medium text-white">{getDisplayLabel(c)}</p>
+                      {c.display_name && (
+                        <p className="text-white/45 text-xs">({formatPhone(c.customer_phone)})</p>
+                      )}
                       <p className="text-white/60 text-sm truncate mt-0.5">{c.last_body || '—'}</p>
                       <p className="text-white/40 text-xs mt-1">{formatDate(c.last_at)}</p>
                     </button>
+                    <div className="px-4 pb-2">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingNamePhone(c.customer_phone);
+                          setEditingNameValue(c.display_name || '');
+                        }}
+                        className="text-xs text-[#F5C518] hover:underline"
+                      >
+                        {c.display_name ? 'Editar nome' : 'Definir nome'}
+                      </button>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -335,20 +389,65 @@ export default function WhatsAppPage() {
         </div>
 
         <div className="lg:col-span-2 bg-[#1A1A1A] rounded-xl border border-white/5 overflow-hidden flex flex-col max-h-[500px]">
-          <div className="p-4 border-b border-white/5 flex items-center justify-between">
+          <div className="p-4 border-b border-white/5 flex items-center justify-between flex-wrap gap-2">
             <h2 className="font-display text-xl text-white">
-              {selectedPhone ? formatPhone(selectedPhone) : 'Selecione uma conversa'}
+              {selectedPhone
+                ? getDisplayLabel(conversations.find((c) => c.customer_phone === selectedPhone) || { customer_phone: selectedPhone, last_body: '', last_at: '', last_direction: '', count: 0 })
+                : 'Selecione uma conversa'}
             </h2>
-            {selectedPhone && (
+            <div className="flex items-center gap-2">
+              {selectedPhone && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const c = conversations.find((x) => x.customer_phone === selectedPhone);
+                    setEditingNamePhone(selectedPhone);
+                    setEditingNameValue(c?.display_name || '');
+                  }}
+                  className="text-sm text-[#F5C518] hover:underline"
+                >
+                  Renomear cliente
+                </button>
+              )}
+              {selectedPhone && (
+                <button
+                  type="button"
+                  onClick={refreshMessages}
+                  className="text-sm text-[#F5C518] hover:underline"
+                >
+                  Atualizar
+                </button>
+              )}
+            </div>
+          </div>
+          {/* Modal/overlay para editar nome */}
+          {editingNamePhone && (
+            <div className="p-4 bg-white/5 border-b border-white/10 flex flex-wrap items-center gap-2">
+              <label className="text-white/80 text-sm">Nome do cliente:</label>
+              <input
+                type="text"
+                value={editingNameValue}
+                onChange={(e) => setEditingNameValue(e.target.value)}
+                placeholder="Ex: João Silva"
+                className="flex-1 min-w-[120px] px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/40 text-sm"
+              />
               <button
                 type="button"
-                onClick={refreshMessages}
-                className="text-sm text-[#F5C518] hover:underline"
+                onClick={saveContactName}
+                disabled={savingName}
+                className="px-3 py-2 rounded-lg bg-[#F5C518] text-black text-sm font-medium hover:bg-amber-400 disabled:opacity-50"
               >
-                Atualizar
+                {savingName ? 'Salvando...' : 'Salvar'}
               </button>
-            )}
-          </div>
+              <button
+                type="button"
+                onClick={() => { setEditingNamePhone(null); setEditingNameValue(''); }}
+                className="px-3 py-2 rounded-lg bg-white/10 text-white text-sm hover:bg-white/20"
+              >
+                Cancelar
+              </button>
+            </div>
+          )}
           <div className="overflow-y-auto flex-1 p-4 space-y-3">
             {!selectedPhone ? (
               <p className="text-white/50">Clique em uma conversa para ver as mensagens.</p>

@@ -442,6 +442,21 @@ export async function handleIncomingMessage(
   const businessName = tenant.business_name || tenant.name;
   const connectionBarberId = (session?.data as BotSessionData)?.connection_barber_id ?? defaultBarberId ?? null;
 
+  // Nome definido no painel (renomear) sobrescreve o da sessão para esta conversa
+  if (session) {
+    const phoneForDb = phone.startsWith('55') ? phone : '55' + phone;
+    const contactNameRow = await prisma.whatsAppContactName.findUnique({
+      where: { tenant_id_customer_phone: { tenant_id: tenantId, customer_phone: phoneForDb } },
+      select: { display_name: true },
+    });
+    if (contactNameRow) {
+      session = {
+        ...session,
+        data: { ...(session.data || {}), customer_name: contactNameRow.display_name } as BotSessionRecord['data'],
+      } as BotSessionRecord;
+    }
+  }
+
   // ----- Comando global: CANCELAR -----
   if (text.toUpperCase() === 'CANCELAR' || text.toUpperCase().startsWith('CANCELAR ')) {
     await handleCancelAppointment(tenantId, customerPhone, text, connectionBarberId);
@@ -508,7 +523,16 @@ export async function handleIncomingMessage(
 
  // ----- Iniciar sessão se não existir -----
 if (!session) {
-  // Verifica se o cliente já está cadastrado pelo telefone
+  // Nome definido no painel (renomear cliente) tem prioridade
+  const phoneForDb = phone.startsWith('55') ? phone : '55' + phone;
+  const contactNameRow = await prisma.whatsAppContactName.findUnique({
+    where: {
+      tenant_id_customer_phone: { tenant_id: tenantId, customer_phone: phoneForDb },
+    },
+    select: { display_name: true },
+  });
+  const knownNameFromPanel = contactNameRow?.display_name ?? null;
+
   const existingCustomer = await prisma.appointment.findFirst({
     where: {
       tenant_id: tenantId,
@@ -518,7 +542,7 @@ if (!session) {
     select: { customer_name: true },
   });
 
-  const knownName = existingCustomer?.customer_name ?? null;
+  const knownName = knownNameFromPanel ?? existingCustomer?.customer_name ?? null;
 
   session = {
     pk: '',

@@ -45,6 +45,7 @@ model Tenant {
   bot_messages               BotMessage[]
   message_usage              MessageUsage[]
   whatsapp_connections       TenantWhatsApp[]
+  whatsapp_contact_names     WhatsAppContactName[]
 
   created_at                 DateTime @default(now())
   updated_at                 DateTime @updatedAt
@@ -218,4 +219,19 @@ model MessageUsage {
   tenant     Tenant   @relation(fields: [tenant_id], references: [id])
 
   @@unique([tenant_id, month, year])
+}
+
+/// Nome de exibição do cliente no WhatsApp (edição manual no painel; usado pelo bot)
+model WhatsAppContactName {
+  id              String   @id @default(uuid())
+  tenant_id        String
+  customer_phone   String   // normalizado, ex: 55219997624873
+  display_name    String
+  tenant           Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  @@unique([tenant_id, customer_phone])
+  @@index([tenant_id])
 }
