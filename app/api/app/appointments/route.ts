@@ -25,9 +25,12 @@ export async function GET(request: NextRequest) {
   const where: Record<string, unknown> = { tenant_id: auth.tenant.id };
   if (auth.barberId) where.barber_id = auth.barberId;
   if (barberIdParam && !auth.barberId) where.barber_id = barberIdParam;
+  // Esteira/calendário: não mostrar cancelados (barbeiro precisa ver quem vai atender)
   if (statusFilter) {
     const statuses = statusFilter.split(',').map((s) => s.trim());
     where.status = { in: statuses };
+  } else {
+    where.status = { notIn: ['cancelled'] };
   }
   if (startParam && endParam) {
     const start = new Date(startParam + 'T00:00:00.000Z');

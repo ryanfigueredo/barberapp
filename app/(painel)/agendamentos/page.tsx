@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Calendar, CalendarDays, Users } from 'lucide-react';
+import { Calendar, CalendarDays, Users, MessageCircle } from 'lucide-react';
 
 type ViewMode = 'calendar' | 'week' | 'daily';
 
@@ -46,6 +46,12 @@ function getWeekEnd(weekStart: Date): Date {
 function getApiKey(): string {
   if (typeof window === 'undefined') return '';
   return localStorage.getItem('api_key') || '';
+}
+
+function whatsAppUrl(phone: string): string {
+  const d = (phone || '').replace(/\D/g, '');
+  const num = d.startsWith('55') ? d : '55' + d;
+  return `https://wa.me/${num}`;
 }
 
 function statusClass(status: string): string {
@@ -214,9 +220,22 @@ export default function AgendamentosPage() {
                             • {a.barber.name} • {a.service?.name ?? '-'}
                           </p>
                         </div>
-                        <span className={`px-3 py-1 rounded-full text-xs shrink-0 ${statusClass(a.status)}`}>
-                          {a.status}
-                        </span>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {a.customer_phone && (
+                            <a
+                              href={whatsAppUrl(a.customer_phone)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-2 rounded-lg bg-green-500/20 text-green-400 hover:bg-green-500/30 transition"
+                              title="Chamar no WhatsApp"
+                            >
+                              <MessageCircle className="w-4 h-4" />
+                            </a>
+                          )}
+                          <span className={`px-3 py-1 rounded-full text-xs ${statusClass(a.status)}`}>
+                            {a.status}
+                          </span>
+                        </div>
                       </div>
                     ))
                   )}
@@ -352,18 +371,31 @@ export default function AgendamentosPage() {
                               new Date(a.appointment_date).getTime() - new Date(b.appointment_date).getTime()
                           )
                           .map((a) => (
-                            <div key={a.id} className="p-2 rounded-lg bg-white/5 text-left">
-                              <p className="font-medium text-white text-sm truncate">{a.customer_name}</p>
-                              <p className="text-white/60 text-xs">
-                                {new Date(a.appointment_date).toLocaleTimeString('pt-BR', {
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                })}{' '}
-                                • {a.barber.name}
-                              </p>
-                              <span className={`inline-block mt-1 px-2 py-0.5 rounded text-xs ${statusClass(a.status)}`}>
-                                {a.status}
-                              </span>
+                            <div key={a.id} className="p-2 rounded-lg bg-white/5 text-left flex items-start justify-between gap-1">
+                              <div className="min-w-0 flex-1">
+                                <p className="font-medium text-white text-sm truncate">{a.customer_name}</p>
+                                <p className="text-white/60 text-xs">
+                                  {new Date(a.appointment_date).toLocaleTimeString('pt-BR', {
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })}{' '}
+                                  • {a.barber.name}
+                                </p>
+                                <span className={`inline-block mt-1 px-2 py-0.5 rounded text-xs ${statusClass(a.status)}`}>
+                                  {a.status}
+                                </span>
+                              </div>
+                              {a.customer_phone && (
+                                <a
+                                  href={whatsAppUrl(a.customer_phone)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="p-1.5 rounded bg-green-500/20 text-green-400 hover:bg-green-500/30 shrink-0"
+                                  title="WhatsApp"
+                                >
+                                  <MessageCircle className="w-3.5 h-3.5" />
+                                </a>
+                              )}
                             </div>
                           ))
                       )}
@@ -440,19 +472,32 @@ export default function AgendamentosPage() {
                         .map((a) => (
                           <div
                             key={a.id}
-                            className="p-3 rounded-lg bg-white/5 border border-white/5 hover:border-white/10 transition-colors"
+                            className="p-3 rounded-lg bg-white/5 border border-white/5 hover:border-white/10 transition-colors flex items-start justify-between gap-2"
                           >
-                            <p className="font-medium text-white text-sm truncate">{a.customer_name}</p>
-                            <p className="text-white/60 text-xs mt-0.5">
-                              {new Date(a.appointment_date).toLocaleTimeString('pt-BR', {
-                                hour: '2-digit',
-                                minute: '2-digit',
-                              })}{' '}
-                              · {a.service?.name ?? '-'}
-                            </p>
-                            <span className={`inline-block mt-2 px-2 py-0.5 rounded text-xs ${statusClass(a.status)}`}>
-                              {a.status}
-                            </span>
+                            <div className="min-w-0 flex-1">
+                              <p className="font-medium text-white text-sm truncate">{a.customer_name}</p>
+                              <p className="text-white/60 text-xs mt-0.5">
+                                {new Date(a.appointment_date).toLocaleTimeString('pt-BR', {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}{' '}
+                                · {a.service?.name ?? '-'}
+                              </p>
+                              <span className={`inline-block mt-2 px-2 py-0.5 rounded text-xs ${statusClass(a.status)}`}>
+                                {a.status}
+                              </span>
+                            </div>
+                            {a.customer_phone && (
+                              <a
+                                href={whatsAppUrl(a.customer_phone)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="p-2 rounded-lg bg-green-500/20 text-green-400 hover:bg-green-500/30 shrink-0"
+                                title="WhatsApp"
+                              >
+                                <MessageCircle className="w-4 h-4" />
+                              </a>
+                            )}
                           </div>
                         ))
                     )}
@@ -470,15 +515,28 @@ export default function AgendamentosPage() {
                 </div>
                 <div className="p-3 space-y-2">
                   {dailyAppointments.map((a) => (
-                    <div key={a.id} className="p-3 rounded-lg bg-white/5 border border-white/5">
-                      <p className="font-medium text-white text-sm">{a.customer_name}</p>
-                      <p className="text-white/60 text-xs mt-0.5">
-                        {new Date(a.appointment_date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}{' '}
-                        · {a.barber.name} · {a.service?.name ?? '-'}
-                      </p>
-                      <span className={`inline-block mt-2 px-2 py-0.5 rounded text-xs ${statusClass(a.status)}`}>
-                        {a.status}
-                      </span>
+                    <div key={a.id} className="p-3 rounded-lg bg-white/5 border border-white/5 flex items-start justify-between gap-2">
+                      <div>
+                        <p className="font-medium text-white text-sm">{a.customer_name}</p>
+                        <p className="text-white/60 text-xs mt-0.5">
+                          {new Date(a.appointment_date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}{' '}
+                          · {a.barber.name} · {a.service?.name ?? '-'}
+                        </p>
+                        <span className={`inline-block mt-2 px-2 py-0.5 rounded text-xs ${statusClass(a.status)}`}>
+                          {a.status}
+                        </span>
+                      </div>
+                      {a.customer_phone && (
+                        <a
+                          href={whatsAppUrl(a.customer_phone)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-2 rounded-lg bg-green-500/20 text-green-400 hover:bg-green-500/30 shrink-0"
+                          title="WhatsApp"
+                        >
+                          <MessageCircle className="w-4 h-4" />
+                        </a>
+                      )}
                     </div>
                   ))}
                 </div>

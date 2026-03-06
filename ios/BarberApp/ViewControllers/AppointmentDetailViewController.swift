@@ -35,7 +35,7 @@ class AppointmentDetailViewController: UIViewController {
 
         addRow(stack: stack, title: "Horário", value: timeStr)
         addRow(stack: stack, title: "Cliente", value: appointment.customerName)
-        addRow(stack: stack, title: "Telefone", value: appointment.customerPhone)
+        addRowWithWhatsApp(stack: stack, title: "Telefone", value: appointment.customerPhone)
         addRow(stack: stack, title: "Barbeiro", value: appointment.barber.name)
         addRow(stack: stack, title: "Serviço", value: appointment.service?.name ?? "-")
         addRow(stack: stack, title: "Status", value: BarberTheme.statusLabel(appointment.status.rawValue))
@@ -54,5 +54,38 @@ class AppointmentDetailViewController: UIViewController {
         lbl.textColor = BarberTheme.textPrimary
         lbl.numberOfLines = 0
         stack.addArrangedSubview(lbl)
+    }
+
+    private func addRowWithWhatsApp(stack: UIStackView, title: String, value: String) {
+        let row = UIStackView()
+        row.axis = .horizontal
+        row.alignment = .center
+        row.spacing = 12
+
+        let lbl = UILabel()
+        lbl.text = "\(title): \(value)"
+        lbl.font = .systemFont(ofSize: 15)
+        lbl.textColor = BarberTheme.textPrimary
+        lbl.numberOfLines = 0
+        row.addArrangedSubview(lbl)
+
+        let whatsappBtn = UIButton(type: .system)
+        let config = UIImage.SymbolConfiguration(pointSize: 18, weight: .medium)
+        whatsappBtn.setImage(UIImage(systemName: "message.fill", withConfiguration: config), for: .normal)
+        whatsappBtn.tintColor = UIColor(red: 0.18, green: 0.8, blue: 0.44, alpha: 1) // verde WhatsApp
+        whatsappBtn.accessibilityLabel = "Chamar no WhatsApp"
+        whatsappBtn.addAction(UIAction { [weak self] _ in
+            self?.openWhatsApp(phone: value)
+        }, for: .touchUpInside)
+        row.addArrangedSubview(whatsappBtn)
+
+        stack.addArrangedSubview(row)
+    }
+
+    private func openWhatsApp(phone: String) {
+        let digits = phone.replacingOccurrences(of: "[^0-9]", with: "", options: .regularExpression)
+        let num = digits.hasPrefix("55") ? digits : "55" + digits
+        guard let url = URL(string: "https://wa.me/\(num)") else { return }
+        UIApplication.shared.open(url)
     }
 }

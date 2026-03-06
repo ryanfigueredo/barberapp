@@ -306,18 +306,54 @@ struct ApiService {
         try await request(path: "/api/admin/services")
     }
 
-    // MARK: - Conversations / Mensagens (quando o backend tiver endpoint)
+    // MARK: - Conversations / Mensagens WhatsApp
     func getPriorityConversations(completion: @escaping (Result<[Conversation], Error>) -> Void) {
-        // TODO: GET /api/admin/conversations ou similar
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            completion(.success([]))
+        let path = "/api/admin/whatsapp/conversations"
+        fetch(path) { (result: Result<ConversationsResponse, Error>) in
+            switch result {
+            case .success(let resp):
+                let convs = (resp.conversations ?? []).map { c in
+                    let date = ISO8601DateFormatter().date(from: c.last_at) ?? Date()
+                    return Conversation(
+                        id: c.customer_phone,
+                        customerPhone: c.customer_phone,
+                        customerName: c.display_name,
+                        lastMessage: c.last_body,
+                        lastMessageDate: date,
+                        unreadCount: 0,
+                        isWaitingAttendant: c.last_direction == "in"
+                    )
+                }
+                completion(.success(convs))
+            case .failure(let err):
+                completion(.failure(err))
+            }
         }
     }
 
     func getConversationHistory(phone: String, completion: @escaping (Result<[ChatMessage], Error>) -> Void) {
-        // TODO: GET /api/admin/conversations/\(phone)/messages
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            completion(.success([]))
+        guard let encoded = phone.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
+            completion(.failure(ApiError.invalidURL))
+            return
+        }
+        let path = "/api/admin/whatsapp/messages?customer_phone=\(encoded)"
+        fetch(path) { (result: Result<MessagesResponse, Error>) in
+            switch result {
+            case .success(let resp):
+                let msgs = (resp.messages ?? []).map { m in
+                    let date = ISO8601DateFormatter().date(from: m.created_at) ?? Date()
+                    return ChatMessage(
+                        id: m.id,
+                        text: m.body,
+                        isAttendant: m.direction == "out" || m.is_bot,
+                        timestamp: date,
+                        status: "sent"
+                    )
+                }
+                completion(.success(msgs))
+            case .failure(let err):
+                completion(.failure(err))
+            }
         }
     }
 
@@ -357,6 +393,29 @@ struct ApiService {
 
 struct AppointmentsResponse: Decodable {
     let appointments: [Appointment]
+}
+
+struct ConversationsResponse: Decodable {
+    let conversations: [ConversationItem]?
+    struct ConversationItem: Decodable {
+        let customer_phone: String
+        let last_body: String
+        let last_at: String
+        let last_direction: String
+        let count: Int
+        let display_name: String?
+    }
+}
+
+struct MessagesResponse: Decodable {
+    let messages: [MessageItem]?
+    struct MessageItem: Decodable {
+        let id: String
+        let direction: String
+        let body: String
+        let is_bot: Bool
+        let created_at: String
+    }
 }
 
 struct TenantProfile: Decodable {
