@@ -220,6 +220,11 @@ export async function sendWhatsAppMessageFromTenant(
   if (!res.ok) {
     const err = await res.text();
     console.error('[BarberBot] Erro ao enviar:', res.status, err);
+    if (res.status === 401) {
+      console.warn(
+        '[BarberBot] 401 = token inválido ou expirado. Atualize meta_access_token em TenantWhatsApp (ou Tenant) com o token do Meta → WhatsApp → Configuração da API.'
+      );
+    }
     return { ok: false, error: `WhatsApp API: ${res.status}` };
   }
   return { ok: true };
