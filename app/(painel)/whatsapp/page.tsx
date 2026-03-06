@@ -247,9 +247,10 @@ export default function WhatsAppPage() {
                 value={addForm.meta_phone_number_id}
                 onChange={(e) => setAddForm((f) => ({ ...f, meta_phone_number_id: e.target.value }))}
                 required
-                placeholder="ID do número no Meta Business"
+                placeholder="Ex: 983471751512371 (ID do número, não o ID da conta)"
                 className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/40"
               />
+              <p className="text-white/45 text-xs mt-1">Use a &quot;Identificação do número de telefone&quot; do Meta (não o ID da conta/WABA).</p>
             </div>
             <div>
               <label className="block text-white/70 text-sm mb-1">Meta Access Token *</label>

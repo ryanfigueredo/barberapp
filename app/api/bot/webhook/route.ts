@@ -55,6 +55,8 @@ export async function POST(request: NextRequest) {
 
         const messages = value.messages || [];
         const metadata = value.metadata || {};
+        // Meta envia phone_number_id do número que recebeu a mensagem (ex: 983471751512371).
+        // Não confundir com o ID da conta WhatsApp Business (WABA), que é outro.
         const phoneNumberId = metadata.phone_number_id != null ? String(metadata.phone_number_id) : undefined;
 
         console.log('[Webhook] POST recebido — phone_number_id:', phoneNumberId, 'mensagens:', messages?.length, 'metadata:', JSON.stringify(metadata));
