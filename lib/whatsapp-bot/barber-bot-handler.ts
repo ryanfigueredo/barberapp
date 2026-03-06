@@ -124,6 +124,21 @@ function getHelpMessage(): string {
   return `📋 *Comandos disponíveis:*\n\n• *voltar* ou *menu* ou *0* — Voltar ao menu\n• *remarcar* — Iniciar remarcação mantendo serviço\n• *ajuda* ou *?* — Ver esta mensagem\n• *CANCELAR #código* — Cancelar um agendamento (ex: CANCELAR A3F8K2)`;
 }
 
+/** Nome definido no painel (renomear cliente). Retorna null se tabela não existir (P2021). */
+async function getContactDisplayName(tenantId: string, phone: string): Promise<string | null> {
+  try {
+    const phoneForDb = phone.startsWith('55') ? phone : '55' + phone;
+    const row = await prisma.whatsAppContactName.findUnique({
+      where: { tenant_id_customer_phone: { tenant_id: tenantId, customer_phone: phoneForDb } },
+      select: { display_name: true },
+    });
+    return row?.display_name ?? null;
+  } catch (e: unknown) {
+    if (e && typeof e === 'object' && 'code' in e && e.code === 'P2021') return null; // tabela não existe
+    throw e;
+  }
+}
+
 // ============ SEND WHATSAPP ============
 
 async function sendWhatsAppMessage(
@@ -442,17 +457,13 @@ export async function handleIncomingMessage(
   const businessName = tenant.business_name || tenant.name;
   const connectionBarberId = (session?.data as BotSessionData)?.connection_barber_id ?? defaultBarberId ?? null;
 
-  // Nome definido no painel (renomear) sobrescreve o da sessão para esta conversa
+  // Nome definido no painel (renomear) sobrescreve o da sessão — ignora se tabela ainda não existir (P2021)
   if (session) {
-    const phoneForDb = phone.startsWith('55') ? phone : '55' + phone;
-    const contactNameRow = await prisma.whatsAppContactName.findUnique({
-      where: { tenant_id_customer_phone: { tenant_id: tenantId, customer_phone: phoneForDb } },
-      select: { display_name: true },
-    });
-    if (contactNameRow) {
+    const contactName = await getContactDisplayName(tenantId, phone);
+    if (contactName) {
       session = {
         ...session,
-        data: { ...(session.data || {}), customer_name: contactNameRow.display_name } as BotSessionRecord['data'],
+        data: { ...(session.data || {}), customer_name: contactName } as BotSessionRecord['data'],
       } as BotSessionRecord;
     }
   }
@@ -523,15 +534,8 @@ export async function handleIncomingMessage(
 
  // ----- Iniciar sessão se não existir -----
 if (!session) {
-  // Nome definido no painel (renomear cliente) tem prioridade
-  const phoneForDb = phone.startsWith('55') ? phone : '55' + phone;
-  const contactNameRow = await prisma.whatsAppContactName.findUnique({
-    where: {
-      tenant_id_customer_phone: { tenant_id: tenantId, customer_phone: phoneForDb },
-    },
-    select: { display_name: true },
-  });
-  const knownNameFromPanel = contactNameRow?.display_name ?? null;
+  // Nome definido no painel (renomear cliente) tem prioridade — ignora P2021 se tabela não existir
+  const knownNameFromPanel = await getContactDisplayName(tenantId, phone);
 
   const existingCustomer = await prisma.appointment.findFirst({
     where: {
