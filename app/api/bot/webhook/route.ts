@@ -59,33 +59,36 @@ export async function POST(request: NextRequest) {
 
         console.log('[Webhook] POST recebido — phone_number_id:', phoneNumberId, 'mensagens:', messages?.length, 'metadata:', JSON.stringify(metadata));
 
-        let connection = await prisma.tenantWhatsApp.findUnique({
+        const connectionRow = await prisma.tenantWhatsApp.findUnique({
           where: { meta_phone_number_id: phoneNumberId },
           include: { tenant: true },
         });
 
-        if (!connection?.tenant && phoneNumberId) {
+        type WebhookConnection = { tenant: { id: string; slug: string; name: string }; barber_id: string | null };
+        let resolved: WebhookConnection | null = connectionRow
+          ? { tenant: connectionRow.tenant, barber_id: connectionRow.barber_id }
+          : null;
+
+        if (!resolved && phoneNumberId) {
           const legacyTenant = await prisma.tenant.findFirst({
             where: { meta_phone_number_id: phoneNumberId },
           });
           if (legacyTenant) {
             console.log('[Webhook] Usando Tenant legado (meta_phone_number_id no Tenant):', legacyTenant.id);
-            connection = {
-              id: '',
-              tenant_id: legacyTenant.id,
-              barber_id: null,
+            resolved = {
               tenant: { id: legacyTenant.id, slug: legacyTenant.slug, name: legacyTenant.name },
-            } as { id: string; tenant_id: string; barber_id: string | null; tenant: { id: string; slug: string; name: string } };
+              barber_id: null,
+            };
           }
         }
 
-        if (!connection?.tenant) {
+        if (!resolved) {
           console.warn('[Webhook] Conexão não encontrada para phone_number_id:', phoneNumberId, '— Verifique Tenant ou TenantWhatsApp no banco.');
           continue;
         }
 
-        const tenant = connection.tenant;
-        const defaultBarberId = connection.barber_id ?? undefined;
+        const tenant = resolved.tenant;
+        const defaultBarberId = resolved.barber_id ?? undefined;
 
         for (const msg of messages) {
           if (msg.type !== 'text') {
