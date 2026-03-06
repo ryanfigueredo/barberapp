@@ -46,25 +46,30 @@ export async function POST(request: NextRequest) {
 
         const messages = value.messages || [];
         const metadata = value.metadata || {};
-        const phoneNumberId = metadata.phone_number_id;
+        const phoneNumberId = metadata.phone_number_id != null ? String(metadata.phone_number_id) : undefined;
 
-        // Buscar tenant pelo phone_number_id
+        console.log('[Webhook] POST recebido — phone_number_id:', phoneNumberId, 'mensagens:', messages?.length);
+
         const tenant = await prisma.tenant.findFirst({
           where: { meta_phone_number_id: phoneNumberId },
         });
 
         if (!tenant) {
-          console.warn('[Webhook] Tenant não encontrado para phone_number_id:', phoneNumberId);
+          console.warn('[Webhook] Tenant não encontrado para phone_number_id:', phoneNumberId, '— Confira se o tenant no banco tem meta_phone_number_id =', phoneNumberId);
           continue;
         }
 
         for (const msg of messages) {
-          if (msg.type !== 'text') continue;
+          if (msg.type !== 'text') {
+            console.log('[Webhook] Mensagem ignorada (tipo não é text):', msg.type);
+            continue;
+          }
           const from = msg.from;
           const text = msg.text?.body || '';
           const wamid = msg.id;
 
           const customerPhone = '55' + String(from);
+          console.log('[Webhook] Processando — tenant:', tenant.id, 'from:', customerPhone, 'text:', text?.slice(0, 50));
 
           try {
             await handleIncomingMessage(tenant.id, customerPhone, text, wamid);
