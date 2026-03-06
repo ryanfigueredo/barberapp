@@ -31,6 +31,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  console.log('[Webhook] ========== POST recebido', new Date().toISOString(), '==========');
   try {
     const body = await request.json();
 
@@ -60,6 +61,11 @@ export async function POST(request: NextRequest) {
         const phoneNumberId = metadata.phone_number_id != null ? String(metadata.phone_number_id) : undefined;
 
         console.log('[Webhook] POST recebido — phone_number_id:', phoneNumberId, 'mensagens:', messages?.length, 'metadata:', JSON.stringify(metadata));
+
+        if (!phoneNumberId) {
+          console.warn('[Webhook] phone_number_id ausente no metadata, ignorando change.');
+          continue;
+        }
 
         const connectionRow = await prisma.tenantWhatsApp.findUnique({
           where: { meta_phone_number_id: phoneNumberId },
