@@ -30,10 +30,13 @@ final class MainTabViewController: UITabBarController {
         addSettingsButtonToCurrentNavIfNeeded()
     }
 
-    /// Adia a definição do rightBarButtonItem para quando a view já estiver na janela, reduzindo conflitos de constraint na NavigationButtonBar.
+    /// Adia a definição do rightBarButtonItem para depois do layout da NavigationBar,
+    /// evitando conflito de constraints (ItemWrapperView width == 0 vs IB_Leading/Trailing).
     private func addSettingsButtonToCurrentNavIfNeeded() {
         guard let nav = selectedViewController as? UINavigationController else { return }
-        addSettingsButtonToNavIfNeeded(for: nav)
+        DispatchQueue.main.async { [weak self] in
+            self?.addSettingsButtonToNavIfNeeded(for: nav)
+        }
     }
 
     private func addSettingsButtonToNavIfNeeded(for viewController: UIViewController) {
@@ -131,6 +134,8 @@ final class MainTabViewController: UITabBarController {
 
 extension MainTabViewController: UITabBarControllerDelegate {
     func tabBarController(_ tabBarController: UITabBarController, didSelect viewController: UIViewController) {
-        addSettingsButtonToNavIfNeeded(for: viewController)
+        DispatchQueue.main.async { [weak self] in
+            self?.addSettingsButtonToNavIfNeeded(for: viewController)
+        }
     }
 }

@@ -39,14 +39,20 @@ class NewAppointmentViewController: UIViewController {
         super.viewDidLoad()
         title = "Novo Agendamento"
         view.backgroundColor = BarberTheme.bg
-        navigationItem.leftBarButtonItem  = UIBarButtonItem(title: "Cancelar", style: .plain, target: self, action: #selector(cancel))
-        navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Salvar",   style: .plain, target: self, action: #selector(save))
-        navigationItem.leftBarButtonItem?.tintColor  = BarberTheme.textSecond
-        navigationItem.rightBarButtonItem?.tintColor = BarberTheme.gold
         setupForm()
         loadBarbers()
         loadServices()
         phoneField.keyboardType = .phonePad
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        let cancel = UIBarButtonItem(title: "Cancelar", style: .plain, target: self, action: #selector(cancel))
+        let save = UIBarButtonItem(title: "Salvar", style: .plain, target: self, action: #selector(save))
+        cancel.tintColor = BarberTheme.textSecond
+        save.tintColor = BarberTheme.gold
+        navigationItem.leftBarButtonItem = cancel
+        navigationItem.rightBarButtonItem = save
     }
 
     // MARK: - Setup

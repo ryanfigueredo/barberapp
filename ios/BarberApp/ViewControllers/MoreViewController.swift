@@ -22,12 +22,17 @@ final class MoreViewController: UIViewController {
         title = "Mais"
         view.backgroundColor = BarberTheme.bg
         navigationController?.navigationBar.prefersLargeTitles = true
-        navigationItem.rightBarButtonItem = UIBarButtonItem(
+        setupTableView()
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        let item = UIBarButtonItem(
             image: UIImage(systemName: "gearshape.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 16, weight: .medium)),
             style: .plain, target: self, action: #selector(openSettings)
         )
-        navigationItem.rightBarButtonItem?.tintColor = BarberTheme.gold
-        setupTableView()
+        item.tintColor = BarberTheme.gold
+        navigationItem.rightBarButtonItem = item
     }
 
     override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }

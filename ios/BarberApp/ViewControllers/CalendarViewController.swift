@@ -71,6 +71,15 @@ class CalendarViewController: UIViewController {
     private func setupNav() {
         title = "Calendário"
         navigationController?.navigationBar.prefersLargeTitles = true
+        // Bar buttons configurados em viewWillAppear para evitar constraint conflicts
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        configureNavBarButtons()
+    }
+
+    private func configureNavBarButtons() {
         let settings = UIBarButtonItem(
             image: UIImage(systemName: "gearshape.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 16, weight: .medium)),
             style: .plain, target: self, action: #selector(openSettings))
@@ -994,9 +1003,6 @@ class DayAppointmentsSheetViewController: UIViewController {
         fmt.locale = Locale(identifier: "pt_BR")
         title = fmt.string(from: date).capitalized
 
-        navigationItem.leftBarButtonItem = UIBarButtonItem(title: "Fechar", style: .plain, target: self, action: #selector(closeTapped))
-        navigationItem.leftBarButtonItem?.tintColor = BarberTheme.gold
-
         tableView.backgroundColor = .clear
         tableView.separatorColor = BarberTheme.border
         tableView.register(AppointmentTimeBlockCell.self, forCellReuseIdentifier: "cell")
@@ -1023,6 +1029,13 @@ class DayAppointmentsSheetViewController: UIViewController {
             emptyLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             emptyLabel.centerYAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerYAnchor),
         ])
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        let close = UIBarButtonItem(title: "Fechar", style: .plain, target: self, action: #selector(closeTapped))
+        close.tintColor = BarberTheme.gold
+        navigationItem.leftBarButtonItem = close
     }
 
     @objc private func closeTapped() {

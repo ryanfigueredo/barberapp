@@ -412,9 +412,6 @@ final class ReagendarViewController: UIViewController {
         super.viewDidLoad()
         title = "Novo dia e horário"
         view.backgroundColor = BarberTheme.bg
-        navigationItem.leftBarButtonItem = UIBarButtonItem(barButtonSystemItem: .cancel, target: self, action: #selector(cancelar))
-        navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Reagendar", style: .prominent, target: self, action: #selector(reagendar))
-        navigationItem.rightBarButtonItem?.tintColor = BarberTheme.gold
 
         datePicker.datePickerMode = .dateAndTime
         datePicker.minimumDate = Date()
@@ -430,6 +427,14 @@ final class ReagendarViewController: UIViewController {
             datePicker.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             datePicker.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 20),
         ])
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        navigationItem.leftBarButtonItem = UIBarButtonItem(barButtonSystemItem: .cancel, target: self, action: #selector(cancelar))
+        let reagendar = UIBarButtonItem(title: "Reagendar", style: .prominent, target: self, action: #selector(reagendar))
+        reagendar.tintColor = BarberTheme.gold
+        navigationItem.rightBarButtonItem = reagendar
     }
 
     @objc private func cancelar() {

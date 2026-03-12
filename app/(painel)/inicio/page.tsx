@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Calendar, CalendarRange, Users, Banknote, Clock } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+import { translateStatus } from '@/lib/appointment-status';
 
 interface Stats {
   today: number;
@@ -28,17 +30,12 @@ function formatMoney(value: number): string {
 export default function InicioPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
+  const { fetchWithAuth } = useAuth();
 
   useEffect(() => {
-    fetch('/api/admin/stats', {
-      headers: {
-        'X-API-Key': (typeof window !== 'undefined' ? localStorage.getItem('api_key') : '') || '',
-      },
-    })
+    fetchWithAuth('/api/admin/stats')
       .then((r) =>
-        r.ok
-          ? r.json()
-          : { today: 0, week: 0, barbers: 0, revenue_today: 0, revenue_week: 0, upcoming_today: [] }
+        r.ok ? r.json() : { today: 0, week: 0, barbers: 0, revenue_today: 0, revenue_week: 0, upcoming_today: [] }
       )
       .then(setStats)
       .catch(() =>
@@ -52,7 +49,7 @@ export default function InicioPage() {
         })
       )
       .finally(() => setLoading(false));
-  }, []);
+  }, [fetchWithAuth]);
 
   const formatTime = (iso: string) =>
     new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
@@ -163,7 +160,7 @@ export default function InicioPage() {
                             : 'bg-white/10 text-white/70'
                         }`}
                     >
-                      {a.status}
+                      {translateStatus(a.status)}
                     </span>
                   </div>
                 ))

@@ -29,12 +29,17 @@ class SettingsViewController: UIViewController {
         title = "Configurações"
         view.backgroundColor = BarberTheme.bg
         navigationController?.navigationBar.prefersLargeTitles = true
-        navigationItem.leftBarButtonItem = UIBarButtonItem(barButtonSystemItem: .done, target: self, action: #selector(dismissSelf))
-        navigationItem.leftBarButtonItem?.tintColor = BarberTheme.gold
 
         buildSections()
         setupTableView()
         setupLogoutButton()
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        let item = UIBarButtonItem(barButtonSystemItem: .done, target: self, action: #selector(dismissSelf))
+        item.tintColor = BarberTheme.gold
+        navigationItem.leftBarButtonItem = item
     }
 
     private func buildSections() {

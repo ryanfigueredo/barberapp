@@ -39,13 +39,19 @@ class SubscriptionManager: ObservableObject {
         isLoading = true
         defer { isLoading = false }
 
-        for await result in Transaction.currentEntitlements {
-            if case .verified(let transaction) = result,
-               transaction.productID == productID,
-               transaction.revocationDate == nil {
-                status = .active
-                return
+        // No Simulator ou sem conta Apple ativa, StoreKit retorna ASDErrorDomain 509.
+        do {
+            for await result in Transaction.currentEntitlements {
+                if case .verified(let transaction) = result,
+                   transaction.productID == productID,
+                   transaction.revocationDate == nil {
+                    status = .active
+                    return
+                }
             }
+        } catch {
+            // ASDErrorDomain 509 "No active account" no Simulator / sem conta Apple
+            // Ignoramos e usamos trial/none normalmente
         }
 
         if let start = UserDefaults.standard.object(forKey: trialStartKey) as? Date {

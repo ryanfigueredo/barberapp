@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { Eye, EyeOff, Copy, Plus, Pencil, Check, X } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { useAuth } from '@/hooks/useAuth';
+import ConfirmModal from '@/components/ConfirmModal';
 
 interface Tenant {
   id: string;
@@ -44,18 +47,22 @@ export default function ConfiguracoesPage() {
   const [barberForm, setBarberForm] = useState({ name: '', phone: '' });
   const [editingBarberId, setEditingBarberId] = useState<string | null>(null);
   const [editBarberForm, setEditBarberForm] = useState({ name: '', phone: '', active: true });
-  const [savingBarber, setSavingBarber] = useState(false);
   const [showNewBarber, setShowNewBarber] = useState(false);
+  const [confirmBarber, setConfirmBarber] = useState<{ id: string; name: string } | null>(null);
 
-  const headers = () => ({
-    'X-API-Key': typeof window !== 'undefined' ? localStorage.getItem('api_key') || '' : '',
-    'Content-Type': 'application/json',
-  });
+  const { apiKey: authApiKey, headers, fetchWithAuth } = useAuth();
+
+  const getHeaders = () => ({ ...headers, 'Content-Type': 'application/json' });
+
+  const [savingBarber, setSavingBarber] = useState(false);
 
   useEffect(() => {
-    const stored = localStorage.getItem('api_key');
-    if (stored) setApiKey(stored);
-    fetch('/api/admin/tenant-profile', { headers: { 'X-API-Key': stored || '' } })
+    if (authApiKey) setApiKey(authApiKey);
+  }, [authApiKey]);
+
+  useEffect(() => {
+    if (!authApiKey) return;
+    fetchWithAuth('/api/admin/tenant-profile')
       .then((r) => r.json())
       .then((data) => {
         setTenant(data);
@@ -72,20 +79,21 @@ export default function ConfiguracoesPage() {
         }
       })
       .catch(() => setTenant(null));
-  }, []);
+  }, [authApiKey, fetchWithAuth]);
 
   useEffect(() => {
-    fetch('/api/admin/barbers', { headers: { 'X-API-Key': localStorage.getItem('api_key') || '' } })
+    if (!authApiKey) return;
+    fetchWithAuth('/api/admin/barbers')
       .then((r) => r.json())
       .then((data) => (Array.isArray(data) ? data : []))
       .then(setBarbers)
       .catch(() => setBarbers([]));
-  }, []);
+  }, [authApiKey, fetchWithAuth]);
 
   const saveApiKey = () => {
     if (apiKey.trim()) {
       localStorage.setItem('api_key', apiKey.trim());
-      alert('API Key salva! Recarregue a página.');
+      toast.success('API Key salva! Recarregue a página.');
     }
   };
 
@@ -94,7 +102,7 @@ export default function ConfiguracoesPage() {
     if (!key) return;
     try {
       await navigator.clipboard.writeText(key);
-      alert('API Key copiada!');
+      toast.success('API Key copiada!');
     } catch {
       window.prompt('Copie a API Key:', key);
     }
@@ -103,9 +111,9 @@ export default function ConfiguracoesPage() {
   const saveProfile = async () => {
     setSavingProfile(true);
     try {
-      const r = await fetch('/api/admin/tenant-profile', {
+      const r = await fetchWithAuth('/api/admin/tenant-profile', {
         method: 'PATCH',
-        headers: headers(),
+        headers: getHeaders(),
         body: JSON.stringify({
           name: profileForm.name.trim() || undefined,
           business_name: profileForm.business_name.trim() || undefined,
@@ -119,7 +127,7 @@ export default function ConfiguracoesPage() {
       if (r.ok) {
         const data = await r.json();
         setTenant((t) => (t ? { ...t, ...data } : null));
-        alert('Perfil salvo! As alterações refletem no app.');
+        toast.success('Perfil salvo! As alterações refletem no app.');
       }
     } finally {
       setSavingProfile(false);
@@ -130,9 +138,9 @@ export default function ConfiguracoesPage() {
     if (!barberForm.name.trim()) return;
     setSavingBarber(true);
     try {
-      const r = await fetch('/api/admin/barbers', {
+      const r = await fetchWithAuth('/api/admin/barbers', {
         method: 'POST',
-        headers: headers(),
+        headers: getHeaders(),
         body: JSON.stringify({
           name: barberForm.name.trim(),
           phone: barberForm.phone.trim() || null,
@@ -145,7 +153,7 @@ export default function ConfiguracoesPage() {
         setShowNewBarber(false);
       } else {
         const err = await r.json();
-        alert(err.error || 'Erro ao criar barbeiro');
+        toast.error(err.error || 'Erro ao criar barbeiro');
       }
     } finally {
       setSavingBarber(false);
@@ -166,9 +174,9 @@ export default function ConfiguracoesPage() {
     if (!editingBarberId) return;
     setSavingBarber(true);
     try {
-      const r = await fetch(`/api/admin/barbers/${editingBarberId}`, {
+      const r = await fetchWithAuth(`/api/admin/barbers/${editingBarberId}`, {
         method: 'PATCH',
-        headers: headers(),
+        headers: getHeaders(),
         body: JSON.stringify({
           name: editBarberForm.name.trim(),
           phone: editBarberForm.phone.trim() || null,
@@ -185,15 +193,17 @@ export default function ConfiguracoesPage() {
     }
   };
 
-  const desativarBarber = async (id: string) => {
-    if (!confirm('Desativar este barbeiro?')) return;
-    const r = await fetch(`/api/admin/barbers/${id}`, {
-      method: 'DELETE',
-      headers: { 'X-API-Key': typeof window !== 'undefined' ? localStorage.getItem('api_key') || '' : '' },
-    });
+  const desativarBarber = async () => {
+    if (!confirmBarber) return;
+    const { id } = confirmBarber;
+    const r = await fetchWithAuth(`/api/admin/barbers/${id}`, { method: 'DELETE' });
     if (r.ok) {
       setBarbers((prev) => prev.map((x) => (x.id === id ? { ...x, active: false } : x)));
       setEditingBarberId(null);
+      setConfirmBarber(null);
+      toast.success('Barbeiro desativado.');
+    } else {
+      toast.error('Erro ao desativar barbeiro.');
     }
   };
 
@@ -455,7 +465,7 @@ export default function ConfiguracoesPage() {
                         </button>
                         {b.active && (
                           <button
-                            onClick={() => desativarBarber(b.id)}
+                            onClick={() => setConfirmBarber({ id: b.id, name: b.name })}
                             className="text-sm text-white/50 hover:text-red-400"
                           >
                             Desativar
@@ -470,6 +480,16 @@ export default function ConfiguracoesPage() {
           </div>
         </div>
       </div>
+
+      <ConfirmModal
+        open={!!confirmBarber}
+        title="Desativar barbeiro"
+        message={confirmBarber ? `Tem certeza que deseja desativar ${confirmBarber.name}?` : ''}
+        confirmLabel="Desativar"
+        variant="danger"
+        onConfirm={desativarBarber}
+        onCancel={() => setConfirmBarber(null)}
+      />
     </div>
   );
 }

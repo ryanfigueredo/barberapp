@@ -1,7 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Calendar, CalendarDays, Users, MessageCircle } from 'lucide-react';
+import { Calendar, CalendarDays, Users, MessageCircle, Check, X, CheckCircle2 } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { useAuth } from '@/hooks/useAuth';
+import { translateStatus } from '@/lib/appointment-status';
 
 type ViewMode = 'calendar' | 'week' | 'daily';
 
@@ -43,10 +46,6 @@ function getWeekEnd(weekStart: Date): Date {
   return end;
 }
 
-function getApiKey(): string {
-  if (typeof window === 'undefined') return '';
-  return localStorage.getItem('api_key') || '';
-}
 
 function whatsAppUrl(phone: string): string {
   const d = (phone || '').replace(/\D/g, '');
@@ -58,8 +57,10 @@ function statusClass(status: string): string {
   switch (status) {
     case 'confirmed': return 'bg-barber-blue/20 text-barber-blue';
     case 'pending': return 'bg-barber-warning/20 text-barber-warning';
+    case 'in_progress': return 'bg-blue-500/20 text-blue-400';
     case 'completed': return 'bg-barber-success/20 text-barber-success';
     case 'cancelled': return 'bg-barber-danger/20 text-barber-danger';
+    case 'no_show': return 'bg-orange-500/20 text-orange-400';
     default: return 'bg-white/10 text-white/70';
   }
 }
@@ -77,8 +78,7 @@ export default function AgendamentosPage() {
   const [dailyAppointments, setDailyAppointments] = useState<Appointment[]>([]);
   const [barbers, setBarbers] = useState<Barber[]>([]);
 
-  const apiKey = getApiKey();
-  const headers = { 'X-API-Key': apiKey };
+  const { headers, fetchWithAuth } = useAuth();
 
   const year = calendarBaseDate.getFullYear();
   const month = calendarBaseDate.getMonth();
@@ -86,40 +86,37 @@ export default function AgendamentosPage() {
 
   useEffect(() => {
     if (viewMode !== 'calendar') return;
-    fetch(`/api/app/appointments/month?month=${monthStr}`, { headers })
-      .then((r) => r.json())
+    fetchWithAuth(`/api/app/appointments/month?month=${monthStr}`)
+      .then((r) => r.ok ? r.json() : Promise.resolve({ days_with_appointments: {} }))
       .then((d) => setDaysWithDots(d.days_with_appointments || {}))
       .catch(() => setDaysWithDots({}));
-  }, [viewMode, monthStr, apiKey]);
+  }, [viewMode, monthStr, fetchWithAuth]);
 
   useEffect(() => {
-    if (!selectedDate) {
-      setDayAppointments([]);
-      return;
-    }
+    if (!selectedDate) return;
     const dateStr = selectedDate.toISOString().slice(0, 10);
-    fetch(`/api/app/appointments?date=${dateStr}`, { headers })
-      .then((r) => r.json())
+    fetchWithAuth(`/api/app/appointments?date=${dateStr}`)
+      .then((r) => r.ok ? r.json() : { appointments: [] })
       .then((d) => setDayAppointments(d.appointments || []))
       .catch(() => setDayAppointments([]));
-  }, [selectedDate, apiKey]);
+  }, [selectedDate, fetchWithAuth]);
 
   useEffect(() => {
     if (viewMode !== 'week') return;
     const start = weekStart.toISOString().slice(0, 10);
     const end = getWeekEnd(weekStart).toISOString().slice(0, 10);
-    fetch(`/api/app/appointments?start=${start}&end=${end}`, { headers })
-      .then((r) => r.json())
+    fetchWithAuth(`/api/app/appointments?start=${start}&end=${end}`)
+      .then((r) => r.ok ? r.json() : { appointments: [] })
       .then((d) => setWeekAppointments(d.appointments || []))
       .catch(() => setWeekAppointments([]));
-  }, [viewMode, weekStart, apiKey]);
+  }, [viewMode, weekStart, fetchWithAuth]);
 
   useEffect(() => {
     if (viewMode !== 'daily') return;
     const dateStr = dailyDate.toISOString().slice(0, 10);
     Promise.all([
-      fetch(`/api/app/appointments?date=${dateStr}`, { headers }).then((r) => r.json()),
-      fetch('/api/app/barbers', { headers }).then((r) => r.json()),
+      fetchWithAuth(`/api/app/appointments?date=${dateStr}`).then((r) => r.ok ? r.json() : { appointments: [] }),
+      fetchWithAuth('/api/app/barbers').then((r) => r.ok ? r.json() : []),
     ])
       .then(([apptsRes, barbersList]) => {
         setDailyAppointments(apptsRes.appointments || []);
@@ -129,7 +126,7 @@ export default function AgendamentosPage() {
         setDailyAppointments([]);
         setBarbers([]);
       });
-  }, [viewMode, dailyDate, apiKey]);
+  }, [viewMode, dailyDate, fetchWithAuth]);
 
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -152,6 +149,64 @@ export default function AgendamentosPage() {
     barber,
     appointments: dailyAppointments.filter((a) => a.barber.id === barber.id),
   }));
+
+  const updateAppointmentStatus = async (id: string, status: string) => {
+    const r = await fetchWithAuth(`/api/app/appointments/${id}/status`, {
+      method: 'PATCH',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    });
+    if (r.ok) {
+      const updated = await r.json();
+      const updater = (prev: Appointment[]) =>
+        prev.map((a) => (a.id === id ? { ...a, status: updated.status } : a));
+      setDayAppointments(updater);
+      setWeekAppointments(updater);
+      setDailyAppointments(updater);
+      toast.success('Status atualizado.');
+    } else {
+      const err = await r.json();
+      toast.error(err.error || 'Erro ao atualizar status.');
+    }
+  };
+
+  const AppointmentActions = ({ a, compact = false }: { a: Appointment; compact?: boolean }) => {
+    const size = compact ? 'w-3.5 h-3.5' : 'w-4 h-4';
+    const btnClass = compact
+      ? 'p-1.5 rounded bg-white/10 hover:bg-white/20 transition shrink-0'
+      : 'p-2 rounded-lg bg-white/5 hover:bg-white/10 transition shrink-0';
+    return (
+      <div className="flex items-center gap-1">
+        {a.status === 'pending' && (
+          <button
+            onClick={() => updateAppointmentStatus(a.id, 'confirmed')}
+            className={`${btnClass} text-green-400`}
+            title="Confirmar"
+          >
+            <Check className={size} />
+          </button>
+        )}
+        {(a.status === 'pending' || a.status === 'confirmed') && (
+          <button
+            onClick={() => updateAppointmentStatus(a.id, 'completed')}
+            className={`${btnClass} text-barber-success`}
+            title="Concluir"
+          >
+            <CheckCircle2 className={size} />
+          </button>
+        )}
+        {a.status !== 'cancelled' && (
+          <button
+            onClick={() => updateAppointmentStatus(a.id, 'cancelled')}
+            className={`${btnClass} text-red-400`}
+            title="Cancelar"
+          >
+            <X className={size} />
+          </button>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden p-8">
@@ -222,6 +277,7 @@ export default function AgendamentosPage() {
                           </p>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
+                          <AppointmentActions a={a} />
                           {a.customer_phone && (
                             <a
                               href={whatsAppUrl(a.customer_phone)}
@@ -234,7 +290,7 @@ export default function AgendamentosPage() {
                             </a>
                           )}
                           <span className={`px-3 py-1 rounded-full text-xs ${statusClass(a.status)}`}>
-                            {a.status}
+                            {translateStatus(a.status)}
                           </span>
                         </div>
                       </div>
@@ -383,9 +439,10 @@ export default function AgendamentosPage() {
                                   • {a.barber.name}
                                 </p>
                                 <span className={`inline-block mt-1 px-2 py-0.5 rounded text-xs ${statusClass(a.status)}`}>
-                                  {a.status}
+                                  {translateStatus(a.status)}
                                 </span>
                               </div>
+                              <AppointmentActions a={a} compact />
                               {a.customer_phone && (
                                 <a
                                   href={whatsAppUrl(a.customer_phone)}
@@ -485,20 +542,23 @@ export default function AgendamentosPage() {
                                 · {a.service?.name ?? '-'}
                               </p>
                               <span className={`inline-block mt-2 px-2 py-0.5 rounded text-xs ${statusClass(a.status)}`}>
-                                {a.status}
+                                {translateStatus(a.status)}
                               </span>
                             </div>
-                            {a.customer_phone && (
-                              <a
-                                href={whatsAppUrl(a.customer_phone)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="p-2 rounded-lg bg-green-500/20 text-green-400 hover:bg-green-500/30 shrink-0"
-                                title="WhatsApp"
-                              >
-                                <MessageCircle className="w-4 h-4" />
-                              </a>
-                            )}
+                            <div className="flex items-center gap-1 shrink-0">
+                              <AppointmentActions a={a} compact />
+                              {a.customer_phone && (
+                                <a
+                                  href={whatsAppUrl(a.customer_phone)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="p-2 rounded-lg bg-green-500/20 text-green-400 hover:bg-green-500/30"
+                                  title="WhatsApp"
+                                >
+                                  <MessageCircle className="w-4 h-4" />
+                                </a>
+                              )}
+                            </div>
                           </div>
                         ))
                     )}
@@ -524,20 +584,23 @@ export default function AgendamentosPage() {
                           · {a.barber.name} · {a.service?.name ?? '-'}
                         </p>
                         <span className={`inline-block mt-2 px-2 py-0.5 rounded text-xs ${statusClass(a.status)}`}>
-                          {a.status}
+                          {translateStatus(a.status)}
                         </span>
                       </div>
-                      {a.customer_phone && (
-                        <a
-                          href={whatsAppUrl(a.customer_phone)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="p-2 rounded-lg bg-green-500/20 text-green-400 hover:bg-green-500/30 shrink-0"
-                          title="WhatsApp"
-                        >
-                          <MessageCircle className="w-4 h-4" />
-                        </a>
-                      )}
+                      <div className="flex items-center gap-1 shrink-0">
+                        <AppointmentActions a={a} compact />
+                        {a.customer_phone && (
+                          <a
+                            href={whatsAppUrl(a.customer_phone)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-2 rounded-lg bg-green-500/20 text-green-400 hover:bg-green-500/30"
+                            title="WhatsApp"
+                          >
+                            <MessageCircle className="w-4 h-4" />
+                          </a>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>

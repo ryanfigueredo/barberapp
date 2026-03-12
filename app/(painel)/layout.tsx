@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { useAuth } from '@/hooks/useAuth';
 
 const nav = [
   { href: '/inicio', label: 'Início' },
@@ -23,24 +24,22 @@ export default function PainelLayout({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const { apiKey, logout, fetchWithAuth, ready } = useAuth();
   const [showPrices, setShowPrices] = useState(false);
 
   useEffect(() => {
-    const hasApiKey = typeof window !== 'undefined' && !!localStorage.getItem('api_key');
-    if (!hasApiKey) {
+    if (!ready) return;
+    if (!apiKey) {
       router.replace('/login');
       return;
     }
-    fetch('/api/me', {
-      credentials: 'include',
-      headers: { 'X-API-Key': localStorage.getItem('api_key') || '' },
-    })
+    fetchWithAuth('/api/me')
       .then((r) => r.json())
       .then((data: { user?: { username?: string } }) => {
         setShowPrices(data.user?.username === PRICES_ALLOWED_USER);
       })
       .catch(() => {});
-  }, [router]);
+  }, [router, apiKey, ready, fetchWithAuth]);
 
   return (
     <div className="min-h-screen flex" style={{ backgroundColor: 'var(--barber-bg)' }}>
@@ -88,12 +87,13 @@ export default function PainelLayout({
             )}
           </nav>
           <div className="p-4 border-t border-white/5 shrink-0">
-          <Link
-            href="/login"
-            className="block px-4 py-2 text-white/50 text-sm hover:text-white"
+          <button
+            type="button"
+            onClick={logout}
+            className="block w-full text-left px-4 py-2 text-white/50 text-sm hover:text-white transition"
           >
-              ← Sair
-            </Link>
+            ← Sair
+          </button>
           </div>
         </aside>
       <main className="flex-1 min-w-0 ml-64 h-screen overflow-hidden flex flex-col">
