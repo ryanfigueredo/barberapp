@@ -46,6 +46,7 @@ model Tenant {
   message_usage              MessageUsage[]
   whatsapp_connections       TenantWhatsApp[]
   whatsapp_contact_names     WhatsAppContactName[]
+  whatsapp_attendant_requests WhatsAppAttendantRequest[]
 
   created_at                 DateTime @default(now())
   updated_at                 DateTime @updatedAt
@@ -234,4 +235,19 @@ model WhatsAppContactName {
 
   @@unique([tenant_id, customer_phone])
   @@index([tenant_id])
+}
+
+/// Cliente pediu para falar com atendente — painel prioriza e destaca
+model WhatsAppAttendantRequest {
+  id              String    @id @default(uuid())
+  tenant_id       String
+  customer_phone  String
+  customer_name  String?
+  requested_at    DateTime  @default(now())
+  resolved_at    DateTime?
+
+  tenant          Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id])
+  @@index([tenant_id, resolved_at])
 }

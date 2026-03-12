@@ -32,6 +32,7 @@ interface Conversation {
   last_direction: string;
   count: number;
   display_name?: string | null;
+  attendant_requested_at?: string | null;
 }
 
 interface Message {
@@ -79,6 +80,7 @@ export default function WhatsAppPage() {
   const [editingNamePhone, setEditingNamePhone] = useState<string | null>(null);
   const [editingNameValue, setEditingNameValue] = useState('');
   const [savingName, setSavingName] = useState(false);
+  const [resolvingAttendant, setResolvingAttendant] = useState(false);
 
   const apiHeaders = () => ({ 'X-API-Key': typeof localStorage !== 'undefined' ? localStorage.getItem('api_key') || '' : '' });
 
@@ -211,6 +213,26 @@ export default function WhatsAppPage() {
   };
 
   const getDisplayLabel = (c: Conversation) => c.display_name || formatPhone(c.customer_phone);
+
+  const resolveAttendantRequest = async (phone: string) => {
+    setResolvingAttendant(true);
+    try {
+      const r = await fetch('/api/admin/whatsapp/attendant-request/resolve', {
+        method: 'POST',
+        headers: { ...apiHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customer_phone: phone }),
+      });
+      if (r.ok) {
+        setConversations((prev) =>
+          prev.map((c) => (c.customer_phone === phone ? { ...c, attendant_requested_at: null } : c))
+        );
+      }
+    } catch {
+      // ignore
+    } finally {
+      setResolvingAttendant(false);
+    }
+  };
 
   return (
     <div className="p-8">
@@ -359,9 +381,16 @@ export default function WhatsAppPage() {
                       onClick={() => setSelectedPhone(c.customer_phone)}
                       className={`w-full text-left p-4 hover:bg-white/5 transition-colors ${
                         selectedPhone === c.customer_phone ? 'bg-white/10' : ''
-                      }`}
+                      } ${c.attendant_requested_at ? 'border-l-4 border-l-amber-500' : ''}`}
                     >
-                      <p className="font-medium text-white">{getDisplayLabel(c)}</p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-medium text-white">{getDisplayLabel(c)}</p>
+                        {c.attendant_requested_at && (
+                          <span className="px-2 py-0.5 rounded text-xs font-medium bg-amber-500/30 text-amber-300">
+                            Pediu atendente
+                          </span>
+                        )}
+                      </div>
                       {c.display_name && (
                         <p className="text-white/45 text-xs">({formatPhone(c.customer_phone)})</p>
                       )}
@@ -395,28 +424,38 @@ export default function WhatsAppPage() {
                 ? getDisplayLabel(conversations.find((c) => c.customer_phone === selectedPhone) || { customer_phone: selectedPhone, last_body: '', last_at: '', last_direction: '', count: 0 })
                 : 'Selecione uma conversa'}
             </h2>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               {selectedPhone && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const c = conversations.find((x) => x.customer_phone === selectedPhone);
-                    setEditingNamePhone(selectedPhone);
-                    setEditingNameValue(c?.display_name || '');
-                  }}
-                  className="text-sm text-[#D9AE59] hover:underline"
-                >
-                  Renomear cliente
-                </button>
-              )}
-              {selectedPhone && (
-                <button
-                  type="button"
-                  onClick={refreshMessages}
-                  className="text-sm text-[#D9AE59] hover:underline"
-                >
-                  Atualizar
-                </button>
+                <>
+                  {conversations.find((c) => c.customer_phone === selectedPhone)?.attendant_requested_at && (
+                    <button
+                      type="button"
+                      onClick={() => resolveAttendantRequest(selectedPhone)}
+                      disabled={resolvingAttendant}
+                      className="px-3 py-1.5 rounded-lg bg-amber-500/30 text-amber-200 text-sm font-medium hover:bg-amber-500/50 disabled:opacity-50"
+                    >
+                      {resolvingAttendant ? 'Salvando...' : 'Marcar como atendido'}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const c = conversations.find((x) => x.customer_phone === selectedPhone);
+                      setEditingNamePhone(selectedPhone);
+                      setEditingNameValue(c?.display_name || '');
+                    }}
+                    className="text-sm text-[#D9AE59] hover:underline"
+                  >
+                    Renomear cliente
+                  </button>
+                  <button
+                    type="button"
+                    onClick={refreshMessages}
+                    className="text-sm text-[#D9AE59] hover:underline"
+                  >
+                    Atualizar
+                  </button>
+                </>
               )}
             </div>
           </div>

@@ -1,6 +1,6 @@
 /**
  * GET /api/admin/whatsapp/conversations
- * Lista conversas (agrupado por customer_phone) com última mensagem, total e display_name (se cadastrado).
+ * Lista conversas (agrupado por customer_phone) com última mensagem, total, display_name e attendant_requested_at (pediu atendente e ainda não resolvido).
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
 
   const byPhone = new Map<
     string,
-    { customer_phone: string; last_body: string; last_at: string; last_direction: string; count: number; display_name?: string | null }
+    { customer_phone: string; last_body: string; last_at: string; last_direction: string; count: number; display_name?: string | null; attendant_requested_at?: string | null }
   >();
   for (const m of raw) {
     const key = m.customer_phone;
@@ -43,21 +43,37 @@ export async function GET(request: NextRequest) {
     entry.count += 1;
   }
 
-  const phones = Array.from(byPhone.keys()).map(normalizePhoneForKey);
+const phones = Array.from(byPhone.keys()).map(normalizePhoneForKey);
+  let attendantRequests: { customer_phone: string; requested_at: Date }[] = [];
+  try {
+    attendantRequests = await prisma.whatsAppAttendantRequest.findMany({
+      where: { tenant_id: auth.tenant.id, resolved_at: null },
+      select: { customer_phone: true, requested_at: true },
+      orderBy: { requested_at: 'desc' },
+    });
+  } catch {
+    // Tabela pode não existir ainda (migração não rodou)
+  }
   const contactNames = await prisma.whatsAppContactName.findMany({
     where: { tenant_id: auth.tenant.id, customer_phone: { in: phones } },
     select: { customer_phone: true, display_name: true },
   });
+
   const nameByPhone = new Map(contactNames.map((c) => [c.customer_phone, c.display_name]));
+  const attendantByPhone = new Map(attendantRequests.map((r) => [normalizePhoneForKey(r.customer_phone), r.requested_at.toISOString()]));
 
   for (const entry of Array.from(byPhone.values())) {
     const normalized = normalizePhoneForKey(entry.customer_phone);
     entry.display_name = nameByPhone.get(normalized) ?? null;
+    entry.attendant_requested_at = attendantByPhone.get(normalized) ?? null;
   }
 
-  const conversations = Array.from(byPhone.values()).sort(
-    (a, b) => new Date(b.last_at).getTime() - new Date(a.last_at).getTime()
-  );
+  const conversations = Array.from(byPhone.values()).sort((a, b) => {
+    const aWants = a.attendant_requested_at ? 1 : 0;
+    const bWants = b.attendant_requested_at ? 1 : 0;
+    if (bWants !== aWants) return bWants - aWants;
+    return new Date(b.last_at).getTime() - new Date(a.last_at).getTime();
+  });
 
   return NextResponse.json({ conversations });
 }

@@ -99,12 +99,22 @@ export async function POST(request: NextRequest) {
         const defaultBarberId = resolved.barber_id ?? undefined;
 
         for (const msg of messages) {
-          if (msg.type !== 'text') {
-            console.log('[Webhook] Mensagem ignorada (tipo não é text):', msg.type);
+          let text = '';
+          if (msg.type === 'text') {
+            text = msg.text?.body || '';
+          } else if (msg.type === 'interactive') {
+            const interactive = msg.interactive;
+            if (interactive?.type === 'list_reply' && interactive.list_reply?.id != null) {
+              text = String(interactive.list_reply.id);
+            } else if (interactive?.type === 'button_reply' && interactive.button_reply?.id != null) {
+              text = String(interactive.button_reply.id);
+            }
+          }
+          if (text === '') {
+            console.log('[Webhook] Mensagem ignorada (sem texto nem interactive):', msg.type);
             continue;
           }
           const from = msg.from;
-          const text = msg.text?.body || '';
           const wamid = msg.id;
 
           const customerPhone = '55' + String(from);

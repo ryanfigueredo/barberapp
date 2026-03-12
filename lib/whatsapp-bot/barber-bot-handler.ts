@@ -12,6 +12,20 @@ import { saveBotMessage } from '@/lib/whatsapp-bot/save-bot-message';
 
 const SESSION_INACTIVITY_MS = 20 * 60 * 1000; // 20 min
 
+const TIMEZONE_BRAZIL = 'America/Sao_Paulo';
+
+/** Retorna hoje no fuso America/Sao_Paulo no formato YYYY-MM-DD */
+function getTodayBrazil(): string {
+  return new Date().toLocaleDateString('en-CA', { timeZone: TIMEZONE_BRAZIL });
+}
+
+/** Soma dias a uma data YYYY-MM-DD e retorna YYYY-MM-DD (em Brasil). */
+function addDaysBrazil(dateStr: string, days: number): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d + days));
+  return date.toISOString().slice(0, 10);
+}
+
 // ============ TYPES ============
 
 export type BotState =
@@ -22,6 +36,7 @@ export type BotState =
   | 'AGUARDANDO_DATA'
   | 'AGUARDANDO_SLOT'
   | 'AGUARDANDO_CONFIRMACAO'
+  | 'AGUARDANDO_CONFIRMACAO_ATENDENTE'
   | 'AGUARDANDO_REAGENDAMENTO'
   | 'AGUARDANDO_RECOMECAR'
   | 'CONCLUIDO';
@@ -64,31 +79,100 @@ function formatDateLongBR(dateStr: string, timeStr: string): string {
   return `${weekday.charAt(0).toUpperCase() + weekday.slice(1)}, ${dayMonth} às ${timeStr}`;
 }
 
-/** Aceita: hoje, amanhã, DD/MM, DD/MM/YYYY */
+/** Aceita: hoje, amanhã, DD/MM, DD/MM/YYYY — datas em America/Sao_Paulo */
 function parseUserDate(input: string): string | null {
   const lower = input.toLowerCase().trim();
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const todayStr = getTodayBrazil();
+  const [ty] = todayStr.split('-').map(Number);
 
-  if (lower === 'hoje') return today.toISOString().slice(0, 10);
-  if (lower === 'amanha' || lower === 'amanhã') {
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    return tomorrow.toISOString().slice(0, 10);
-  }
+  if (lower === 'hoje') return todayStr;
+  if (lower === 'amanha' || lower === 'amanhã') return addDaysBrazil(todayStr, 1);
 
   const match = input.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/);
   if (match) {
     let [, day, month, year] = match;
-    if (!year) year = String(today.getFullYear());
-    if (year.length === 2) year = '20' + year;
-    const d = parseInt(day, 10);
-    const m = parseInt(month, 10) - 1;
-    const y = parseInt(year, 10);
-    const date = new Date(y, m, d);
-    if (date >= today) return date.toISOString().slice(0, 10);
+    const d = parseInt(String(day), 10);
+    const m = parseInt(String(month), 10);
+    let y = parseInt(String(year || ty), 10);
+    if (year && String(year).length === 2) y = 2000 + (y % 100);
+    const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    if (dateStr >= todayStr) return dateStr;
   }
   return null;
+}
+
+/** Extrai hora do texto: "17h", "17:00", "9h" → { hour, minute } ou null */
+function parseTimeInText(text: string): { hour: number; minute: number } | null {
+  const t = text.toLowerCase().trim();
+  const match = t.match(/(\d{1,2})h(?:\s*(\d{2}))?|(\d{1,2}):(\d{2})/);
+  if (match) {
+    const hour = parseInt(match[1] ?? match[3] ?? '0', 10);
+    const minute = parseInt(match[2] ?? match[4] ?? '0', 10);
+    if (hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) return { hour, minute };
+  }
+  return null;
+}
+
+/** Tenta extrair data do texto (hoje, amanhã, DD/MM). Retorna o que sobrou sem a parte da data. */
+function extractDateFromText(text: string): { dateStr: string; rest: string } | null {
+  const lower = text.toLowerCase().trim();
+  const todayStr = getTodayBrazil();
+  if (lower.includes('amanhã') || lower.includes('amanha')) {
+    const rest = lower.replace(/\b(amanhã|amanha)\b/g, '').replace(/\s+/g, ' ').trim();
+    return { dateStr: addDaysBrazil(todayStr, 1), rest };
+  }
+  if (lower.includes('hoje')) {
+    const rest = lower.replace(/\bhoje\b/g, '').replace(/\s+/g, ' ').trim();
+    return { dateStr: todayStr, rest };
+  }
+  const dateMatch = text.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/);
+  if (dateMatch) {
+    const [full] = dateMatch;
+    const dateStr = parseUserDate(full);
+    if (dateStr) {
+      const rest = text.replace(full, '').replace(/\s+/g, ' ').trim();
+      return { dateStr, rest };
+    }
+  }
+  return null;
+}
+
+/** Encontra serviço por nome aproximado (ex: "cabelo e barba" → "Corte + Barba"). */
+function matchServiceName(text: string, services: { id: string; name: string }[]): { id: string; name: string } | null {
+  const lower = text.toLowerCase().replace(/\s*[+]\s*/g, ' ').replace(/\s+e\s+/g, ' ').trim();
+  const words = lower.split(/\s+/).filter(Boolean);
+  if (words.length === 0) return null;
+  for (const s of services) {
+    const nameLower = s.name.toLowerCase().replace(/\s*[+]\s*/g, ' ').replace(/\s+e\s+/g, ' ');
+    const hasCorteCabelo = words.some((w) => /^(corte|cabelo)$/.test(w)) || nameLower.includes('corte') || nameLower.includes('cabelo');
+    const hasBarba = words.some((w) => /barba/.test(w)) || nameLower.includes('barba');
+    const allMatch = words.every((w) => nameLower.includes(w) || (w === 'cabelo' && nameLower.includes('corte')));
+    if (allMatch || (hasBarba && hasCorteCabelo)) return s;
+  }
+  return null;
+}
+
+/** Parse "cabelo e barba amanhã 17h". Retorna null se não extrair serviço + data + hora. */
+function parseQuickBook(
+  text: string,
+  services: { id: string; name: string }[],
+  _todayStr: string
+): { service_id: string; dateStr: string; hour: number; minute: number } | null {
+  const trimmed = text.trim();
+  if (trimmed.length < 5 || /^[0-6]\s*$/.test(trimmed)) return null;
+  let rest = trimmed;
+  let dateStr: string | null = null;
+  const dateExtract = extractDateFromText(rest);
+  if (dateExtract) {
+    dateStr = dateExtract.dateStr;
+    rest = dateExtract.rest;
+  }
+  const timeMatch = parseTimeInText(rest);
+  if (!timeMatch) return null;
+  rest = rest.replace(/\d{1,2}h(?:\s*\d{2})?/i, '').replace(/\d{1,2}:\d{2}/, '').replace(/\s+/g, ' ').trim();
+  const service = matchServiceName(rest || 'corte', services);
+  if (!service || !dateStr) return null;
+  return { service_id: service.id, dateStr, hour: timeMatch.hour, minute: timeMatch.minute };
 }
 
 function isGlobalBack(text: string): boolean {
@@ -115,13 +199,46 @@ function isConfirmNo(text: string): boolean {
   return ['n', 'nao', 'não', 'no', '2'].includes(t);
 }
 
+/** Detecta se o cliente quer falar com atendente (opção 5 ou frases como "atendente", "falar com alguém") */
+function wantsAttendant(text: string): boolean {
+  const t = text.toLowerCase().trim();
+  if (t === '5') return true;
+  if (/atendente/.test(t)) return true;
+  if (/falar\s+com\s+(um\s+)?atendente/.test(t)) return true;
+  if (/falar\s+com\s+algu[eé]m/.test(t)) return true;
+  if (/quero\s+falar\s+com/.test(t)) return true;
+  if (/preciso\s+falar\s+com/.test(t)) return true;
+  if (/falar\s+com\s+humano/.test(t)) return true;
+  return false;
+}
+
 function getMenuMessage(businessName: string, customerName?: string | null): string {
   const greeting = customerName ? `Olá, ${customerName}! ✂️` : `Olá! 👋 Bem-vindo à ${businessName}!`;
-  return `${greeting}\n\nO que você deseja?\n1️⃣ Agendar horário\n2️⃣ Ver meus agendamentos\n3️⃣ Cancelar agendamento\n4️⃣ Remarcar agendamento\n5️⃣ Falar com atendente`;
+  return `${greeting}\n\nO que você deseja?\n1️⃣ Agendar horário\n2️⃣ Ver meus agendamentos\n3️⃣ Cancelar agendamento\n4️⃣ Remarcar agendamento\n5️⃣ Falar com atendente\n6️⃣ Alterar meu nome`;
+}
+
+function getMenuListPayload(businessName: string, customerName?: string | null): InteractiveListPayload {
+  const greeting = customerName ? `Olá, ${customerName}! ✂️` : `Olá! 👋 Bem-vindo à ${businessName}!`;
+  return {
+    body: `${greeting}\n\nSelecione abaixo a opção que deseja:`,
+    button: 'Exibir opções',
+    sections: [
+      {
+        rows: [
+          { id: '1', title: 'Agendar horário' },
+          { id: '2', title: 'Ver meus agendamentos' },
+          { id: '3', title: 'Cancelar agendamento' },
+          { id: '4', title: 'Remarcar agendamento' },
+          { id: '5', title: 'Falar com atendente' },
+          { id: '6', title: 'Alterar meu nome' },
+        ],
+      },
+    ],
+  };
 }
 
 function getHelpMessage(): string {
-  return `📋 *Comandos disponíveis:*\n\n• *voltar* ou *menu* ou *0* — Voltar ao menu\n• *remarcar* — Iniciar remarcação mantendo serviço\n• *ajuda* ou *?* — Ver esta mensagem\n• *CANCELAR #código* — Cancelar um agendamento (ex: CANCELAR A3F8K2)`;
+  return `📋 *Comandos disponíveis:*\n\n• *voltar* ou *menu* ou *0* — Voltar ao menu\n• *remarcar* — Iniciar remarcação mantendo serviço\n• *6* — Alterar meu nome\n• *ajuda* ou *?* — Ver esta mensagem\n• *CANCELAR #código* — Cancelar um agendamento (ex: CANCELAR A3F8K2)`;
 }
 
 /** Nome definido no painel (renomear cliente). Retorna null se tabela não existir (P2021). */
@@ -166,6 +283,98 @@ async function sendAndLog(
   await sendWhatsAppMessage(tenantId, toPhone, message, connectionBarberId);
   const phone = normalizePhone(toPhone);
   await saveBotMessage(tenantId, phone ? '55' + phone : toPhone, 'out', message);
+}
+
+export interface InteractiveListPayload {
+  body: string;
+  button: string;
+  sections: { title?: string; rows: { id: string; title: string }[] }[];
+}
+
+async function sendWhatsAppInteractiveList(
+  tenantId: string,
+  toPhone: string,
+  payload: InteractiveListPayload,
+  connectionBarberId?: string | null
+): Promise<{ ok: boolean; error?: string }> {
+  const where: { tenant_id: string; barber_id?: string | null } = { tenant_id: tenantId };
+  if (connectionBarberId != null && connectionBarberId !== '') {
+    where.barber_id = connectionBarberId;
+  } else {
+    where.barber_id = null;
+  }
+  let connection = await prisma.tenantWhatsApp.findFirst({
+    where,
+    select: { meta_phone_number_id: true, meta_access_token: true },
+  });
+  if (!connection && (connectionBarberId == null || connectionBarberId === '')) {
+    connection = await prisma.tenantWhatsApp.findFirst({
+      where: { tenant_id: tenantId },
+      select: { meta_phone_number_id: true, meta_access_token: true },
+    });
+  }
+  if (!connection?.meta_phone_number_id || !connection?.meta_access_token) {
+    const legacyTenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { meta_phone_number_id: true, meta_access_token: true },
+    });
+    if (legacyTenant?.meta_phone_number_id && legacyTenant?.meta_access_token) {
+      connection = {
+        meta_phone_number_id: legacyTenant.meta_phone_number_id,
+        meta_access_token: legacyTenant.meta_access_token,
+      };
+    }
+  }
+  if (!connection?.meta_phone_number_id || !connection?.meta_access_token) {
+    return { ok: false, error: 'WhatsApp não configurado' };
+  }
+  const phoneId = connection.meta_phone_number_id;
+  const token = connection.meta_access_token;
+  const to = normalizePhone(toPhone).includes('55') ? toPhone.replace(/\D/g, '') : '55' + toPhone.replace(/\D/g, '');
+
+  const body = {
+    messaging_product: 'whatsapp',
+    recipient_type: 'individual',
+    to: to.replace(/^55/, ''),
+    type: 'interactive',
+    interactive: {
+      type: 'list',
+      body: { text: payload.body },
+      action: {
+        button: payload.button,
+        sections: payload.sections.map((sec) => ({
+          title: sec.title || '',
+          rows: sec.rows.slice(0, 10).map((r) => ({ id: r.id, title: r.title })),
+        })),
+      },
+    },
+  };
+
+  const res = await fetch(`https://graph.facebook.com/v18.0/${phoneId}/messages`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    console.error('[BarberBot] Erro ao enviar lista interativa:', res.status, err);
+    return { ok: false, error: `WhatsApp API: ${res.status}` };
+  }
+  return { ok: true };
+}
+
+async function sendAndLogInteractive(
+  tenantId: string,
+  toPhone: string,
+  payload: InteractiveListPayload,
+  logSummary: string,
+  connectionBarberId?: string | null
+): Promise<void> {
+  const r = await sendWhatsAppInteractiveList(tenantId, toPhone, payload, connectionBarberId);
+  if (!r.ok && r.error !== 'WhatsApp não configurado') throw new Error(r.error);
+  const phone = normalizePhone(toPhone);
+  await saveBotMessage(tenantId, phone ? '55' + phone : toPhone, 'out', logSummary);
 }
 
 export async function sendWhatsAppMessageFromTenant(
@@ -273,6 +482,19 @@ async function getAvailableSlots(
   }));
 }
 
+/** Encontra slot(s) disponível na data e hora (ex: 17:00). */
+async function getSlotsAtTime(
+  tenantId: string,
+  dateStr: string,
+  hour: number,
+  minute: number,
+  barberId?: string | null
+): Promise<{ id: string; barber_id: string; time: string }[]> {
+  const slots = await getAvailableSlots(tenantId, barberId ?? undefined, dateStr);
+  const target = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+  return slots.filter((s) => s.time === target);
+}
+
 /** Retorna até 3 próximas datas (YYYY-MM-DD) que tenham pelo menos um slot. */
 async function getNextDatesWithSlots(
   tenantId: string,
@@ -281,15 +503,16 @@ async function getNextDatesWithSlots(
   limit = 3
 ): Promise<string[]> {
   const result: string[] = [];
-  let d = new Date(fromDateStr + 'T12:00:00.000Z');
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const fromDate = new Date(fromDateStr + 'T12:00:00.000Z');
+  let d = new Date(fromDate);
+  const todayStr = getTodayBrazil();
+  const today = new Date(todayStr + 'T12:00:00.000Z');
   if (d < today) d = today;
   for (let i = 0; i < 14 && result.length < limit; i++) {
     const dateStr = d.toISOString().slice(0, 10);
     const slots = await getAvailableSlots(tenantId, barberId, dateStr);
     if (slots.length > 0) result.push(dateStr);
-    d.setDate(d.getDate() + 1);
+    d.setUTCDate(d.getUTCDate() + 1);
   }
   return result;
 }
@@ -335,6 +558,28 @@ async function createAppointment(
 
     return { id: appt.id };
   });
+}
+
+/** Registra pedido de atendente para o painel priorizar a conversa. */
+async function createAttendantRequest(
+  tenantId: string,
+  customerPhone: string,
+  customerName?: string | null
+): Promise<void> {
+  try {
+    const phoneNorm = customerPhone.replace(/\D/g, '');
+    const phoneForDb = phoneNorm.startsWith('55') ? phoneNorm : '55' + phoneNorm;
+    await prisma.whatsAppAttendantRequest.create({
+      data: {
+        tenant_id: tenantId,
+        customer_phone: phoneForDb,
+        customer_name: customerName || null,
+      },
+    });
+  } catch (e) {
+    if ((e as { code?: string }).code === 'P2021') return; // tabela não existe ainda
+    console.error('[BarberBot] createAttendantRequest', e);
+  }
 }
 
 /** Cancela um agendamento e libera o slot (uso interno, ex.: remarcar). */
@@ -507,7 +752,21 @@ export async function handleIncomingMessage(
     const data = (session?.data ?? {}) as BotSessionData;
     const keepData: BotSessionData = { customer_name: data.customer_name, last_activity_at: Date.now(), connection_barber_id: connectionBarberId ?? undefined };
     await putBotSession(tenantId, phone, 'INICIO', keepData as Record<string, unknown>);
-    await sendAndLog(tenantId, customerPhone, getMenuMessage(businessName, keepData.customer_name), connectionBarberId);
+    await sendAndLogInteractive(tenantId, customerPhone, getMenuListPayload(businessName, keepData.customer_name), getMenuMessage(businessName, keepData.customer_name), connectionBarberId);
+    return;
+  }
+
+  /** Em qualquer estado: "5" ou "Falar com atendente" / "atendente" → pergunta se deseja e depois envia para atendente */
+  if (wantsAttendant(text)) {
+    const data = (session?.data ?? {}) as BotSessionData;
+    const keepData: BotSessionData = { customer_name: data.customer_name, last_activity_at: Date.now(), connection_barber_id: connectionBarberId ?? undefined };
+    await putBotSession(tenantId, phone, 'AGUARDANDO_CONFIRMACAO_ATENDENTE', keepData as Record<string, unknown>);
+    await sendAndLog(
+      tenantId,
+      customerPhone,
+      'Deseja falar com um atendente? Responda *S* para sim ou *N* para voltar ao menu.',
+      connectionBarberId
+    );
     return;
   }
 
@@ -566,7 +825,7 @@ if (!session) {
       connection_barber_id: defaultBarberId ?? undefined,
       customer_name: knownName,
     });
-    await sendAndLog(tenantId, customerPhone, getMenuMessage(businessName, knownName), defaultBarberId ?? undefined);
+    await sendAndLogInteractive(tenantId, customerPhone, getMenuListPayload(businessName, knownName), getMenuMessage(businessName, knownName), defaultBarberId ?? undefined);
     return;
   } else {
     // Cliente novo — pede o nome
@@ -582,6 +841,7 @@ if (!session) {
   const state = session.state as BotState;
   const data = (session.data || {}) as BotSessionData;
   let reply = '';
+  let interactiveList: InteractiveListPayload | null = null;
   let nextState: BotState = state;
   let nextData: BotSessionData = { ...data, last_activity_at: Date.now(), connection_barber_id: connectionBarberId ?? data.connection_barber_id };
 
@@ -592,6 +852,7 @@ if (!session) {
           nextData = { customer_name: data.customer_name, last_activity_at: Date.now() };
           delete nextData.expired_awaiting_reconfirm;
           reply = getMenuMessage(businessName, nextData.customer_name);
+          interactiveList = getMenuListPayload(businessName, nextData.customer_name);
           nextState = 'INICIO';
         } else if (isConfirmNo(text)) {
           reply = 'Ok, quando quiser é só mandar uma mensagem. 👋';
@@ -607,8 +868,12 @@ if (!session) {
       const choice = text.replace(/\D/g, '');
       if (choice === '1') {
         const services = tenant.services;
-        const list = services.map((s, i) => `${i + 1}️⃣ ${s.name} — R$ ${s.price}`).join('\n');
-        reply = `✂️ Qual serviço você quer?\n${list}`;
+        reply = `✂️ Qual serviço você quer?\n${services.map((s, i) => `${i + 1}️⃣ ${s.name} — R$ ${s.price}`).join('\n')}`;
+        interactiveList = {
+          body: '✂️ Qual serviço você quer?',
+          button: 'Exibir opções',
+          sections: [{ rows: services.map((s, i) => ({ id: String(i + 1), title: `${s.name} — R$ ${s.price}` })) }],
+        };
         nextState = 'AGUARDANDO_SERVICO';
       } else if (choice === '2') {
         await handleListAppointments(tenantId, customerPhone, connectionBarberId);
@@ -641,12 +906,35 @@ if (!session) {
         }
       } else if (choice === '5') {
         reply = 'Em breve um atendente responderá. Aguarde! 👋';
+      } else if (choice === '6') {
+        reply = 'Como deseja ser chamado(a)?';
+        nextState = 'AGUARDANDO_NOME';
       } else {
-        if (!data.customer_name && text.length > 0 && !/^[1-5]\s*$/.test(text)) {
+        if (!data.customer_name && text.length > 0 && !/^[1-6]\s*$/.test(text)) {
           reply = 'Como posso te chamar? (ou digite 1 para pular)';
           nextState = 'AGUARDANDO_NOME';
         } else {
-          reply = getMenuMessage(businessName, data.customer_name);
+          const quick = parseQuickBook(text, tenant.services, getTodayBrazil());
+          if (quick && data.customer_name) {
+            const slotsAtTime = await getSlotsAtTime(tenantId, quick.dateStr, quick.hour, quick.minute, undefined);
+            if (slotsAtTime.length > 0) {
+              const slot = slotsAtTime[0];
+              const service = tenant.services.find((s) => s.id === quick.service_id);
+              const barber = tenant.barbers.find((b) => b.id === slot.barber_id);
+              nextData.service_id = quick.service_id;
+              nextData.date = quick.dateStr;
+              nextData.slot_id = slot.id;
+              nextData.barber_id = slot.barber_id;
+              nextState = 'AGUARDANDO_CONFIRMACAO';
+              reply = `✅ *Resumo:*\n✂️ Serviço: ${service?.name ?? '-'}\n👤 Barbeiro: ${barber?.name ?? '-'}\n📅 Data: ${formatDateBR(quick.dateStr)}\n⏰ Horário: ${slot.time}\n\nConfirma? (S/N)`;
+            } else {
+              reply = `Não temos horário às ${String(quick.hour).padStart(2, '0')}:${String(quick.minute).padStart(2, '0')} no dia ${formatDateBR(quick.dateStr)}. Quer escolher outro? Digite 1 para agendar.`;
+              interactiveList = getMenuListPayload(businessName, data.customer_name);
+            }
+          } else {
+            reply = getMenuMessage(businessName, data.customer_name);
+            interactiveList = getMenuListPayload(businessName, data.customer_name);
+          }
         }
       }
       break;
@@ -660,6 +948,7 @@ if (!session) {
         nextData.customer_name = name;
       }
       reply = getMenuMessage(businessName, nextData.customer_name);
+      interactiveList = getMenuListPayload(businessName, nextData.customer_name);
       nextState = 'INICIO';
       break;
     }
@@ -670,11 +959,27 @@ if (!session) {
       if (idx >= 1 && idx <= services.length) {
         nextData.service_id = services[idx - 1].id;
         const barbers = tenant.barbers;
-        const list = barbers.map((b, i) => `${i + 1}️⃣ ${b.name}`).join('\n');
-        reply = `👤 Com qual barbeiro?\n${list}\n0️⃣ Qualquer disponível`;
+        reply = `👤 Com qual barbeiro?\n${barbers.map((b, i) => `${i + 1}️⃣ ${b.name}`).join('\n')}\n0️⃣ Qualquer disponível`;
+        interactiveList = {
+          body: '👤 Com qual barbeiro?',
+          button: 'Exibir opções',
+          sections: [
+            {
+              rows: [
+                ...barbers.map((b, i) => ({ id: String(i + 1), title: b.name })),
+                { id: '0', title: 'Qualquer disponível' },
+              ],
+            },
+          ],
+        };
         nextState = 'AGUARDANDO_BARBEIRO';
       } else {
         reply = `Opção inválida. Digite 1, 2 ou ${services.length}:\n${services.map((s, i) => `${i + 1}️⃣ ${s.name}`).join('\n')}`;
+        interactiveList = {
+          body: `✂️ Qual serviço você quer?`,
+          button: 'Exibir opções',
+          sections: [{ rows: services.map((s, i) => ({ id: String(i + 1), title: `${s.name} — R$ ${s.price}` })) }],
+        };
       }
       break;
     }
@@ -688,29 +993,36 @@ if (!session) {
         nextData.barber_id = barbers[idx - 1].id;
       } else {
         reply = `Opção inválida. Digite 0 ou 1 a ${barbers.length}:\n${barbers.map((b, i) => `${i + 1}️⃣ ${b.name}`).join('\n')}\n0️⃣ Qualquer disponível`;
+        interactiveList = {
+          body: '👤 Com qual barbeiro?',
+          button: 'Exibir opções',
+          sections: [{ rows: [...barbers.map((b, i) => ({ id: String(i + 1), title: b.name })), { id: '0', title: 'Qualquer disponível' }] }],
+        };
         break;
       }
-      const today = new Date();
-      const next3 = [];
-      for (let i = 0; i < 3; i++) {
-        const d = new Date(today);
-        d.setDate(d.getDate() + i);
-        next3.push(d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' }));
-      }
+      const todayStr = getTodayBrazil();
+      const next3 = [todayStr, addDaysBrazil(todayStr, 1), addDaysBrazil(todayStr, 2)].map((dateStr) => {
+        const d = new Date(dateStr + 'T12:00:00.000Z');
+        return d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
+      });
       reply = `📅 Qual data? (ex: hoje, amanhã, 15/06 ou 15/06/2025)\nOu:\n${next3.map((d, i) => `${i + 1}️⃣ ${d}`).join('\n')}`;
+      interactiveList = {
+        body: '📅 Qual data? (ex: hoje, amanhã ou DD/MM)',
+        button: 'Exibir opções',
+        sections: [{ rows: next3.map((d, i) => ({ id: String(i + 1), title: d })) }],
+      };
       nextState = 'AGUARDANDO_DATA';
       break;
     }
 
     case 'AGUARDANDO_DATA': {
+      // "5" / "Falar com atendente" já tratados no bloco global acima
       let dateStr: string | null = null;
       const choice = text.replace(/\D/g, '');
       if (choice === '1' || choice === '2' || choice === '3') {
-        const today = new Date();
+        const todayBrazil = getTodayBrazil();
         const idx = parseInt(choice, 10) - 1;
-        const d = new Date(today);
-        d.setDate(d.getDate() + idx);
-        dateStr = d.toISOString().slice(0, 10);
+        dateStr = idx === 0 ? todayBrazil : addDaysBrazil(todayBrazil, idx);
       } else {
         dateStr = parseUserDate(text);
       }
@@ -728,6 +1040,11 @@ if (!session) {
         } else {
           const list = slots.slice(0, 10).map((s, i) => `${i + 1}️⃣ ${s.time}`).join('\n');
           reply = `⏰ Horários disponíveis em ${formatDateBR(dateStr)}:\n${list}`;
+          interactiveList = {
+            body: `⏰ Horários disponíveis em ${formatDateBR(dateStr)}:`,
+            button: 'Exibir horários',
+            sections: [{ rows: slots.slice(0, 10).map((s, i) => ({ id: String(i + 1), title: s.time })) }],
+          };
           nextState = 'AGUARDANDO_SLOT';
         }
       } else {
@@ -750,6 +1067,11 @@ if (!session) {
         nextState = 'AGUARDANDO_CONFIRMACAO';
       } else {
         reply = `Opção inválida. Digite 1 a ${slots.length}:\n${slots.slice(0, 10).map((s, i) => `${i + 1}️⃣ ${s.time}`).join('\n')}`;
+        interactiveList = {
+          body: `⏰ Horários disponíveis em ${formatDateBR(nextData.date!)}:`,
+          button: 'Exibir horários',
+          sections: [{ rows: slots.slice(0, 10).map((s, i) => ({ id: String(i + 1), title: s.time })) }],
+        };
       }
       break;
     }
@@ -793,6 +1115,22 @@ if (!session) {
       break;
     }
 
+    case 'AGUARDANDO_CONFIRMACAO_ATENDENTE': {
+      if (isConfirmYes(text)) {
+        await createAttendantRequest(tenantId, customerPhone, data.customer_name);
+        reply = '✅ Pedido enviado! Em breve um atendente entrará em contato. Aguarde! 👋';
+        nextState = 'INICIO';
+        nextData = { customer_name: data.customer_name, last_activity_at: Date.now(), connection_barber_id: connectionBarberId ?? undefined };
+      } else if (isConfirmNo(text)) {
+        reply = getMenuMessage(businessName, data.customer_name);
+        nextState = 'INICIO';
+        nextData = { customer_name: data.customer_name, last_activity_at: Date.now(), connection_barber_id: connectionBarberId ?? undefined };
+      } else {
+        reply = 'Responda *S* para falar com um atendente ou *N* para voltar ao menu.';
+      }
+      break;
+    }
+
     case 'AGUARDANDO_REAGENDAMENTO': {
       const appointments = await prisma.appointment.findMany({
         where: {
@@ -811,13 +1149,11 @@ if (!session) {
         nextData.rescheduling_appointment_id = appt.id;
         nextData.service_id = appt.service_id ?? undefined;
         nextData.barber_id = appt.barber_id;
-        const today = new Date();
-        const next3 = [];
-        for (let i = 0; i < 3; i++) {
-          const d = new Date(today);
-          d.setDate(d.getDate() + i);
-          next3.push(d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' }));
-        }
+        const todayStr = getTodayBrazil();
+        const next3 = [todayStr, addDaysBrazil(todayStr, 1), addDaysBrazil(todayStr, 2)].map((dateStr) => {
+          const d = new Date(dateStr + 'T12:00:00.000Z');
+          return d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
+        });
         reply = `📅 Nova data? (ex: hoje, amanhã, DD/MM)\n${next3.map((d, i) => `${i + 1}️⃣ ${d}`).join('\n')}`;
         nextState = 'AGUARDANDO_DATA';
       } else {
@@ -833,12 +1169,17 @@ if (!session) {
 
     case 'CONCLUIDO':
       reply = getMenuMessage(businessName, data.customer_name);
+      interactiveList = getMenuListPayload(businessName, data.customer_name);
       nextState = 'INICIO';
       break;
   }
 
   await updateBotSessionState(tenantId, phone, nextState, nextData as Record<string, unknown>);
-  await sendAndLog(tenantId, customerPhone, reply, connectionBarberId);
+  if (interactiveList) {
+    await sendAndLogInteractive(tenantId, customerPhone, interactiveList, reply || interactiveList.body, connectionBarberId);
+  } else {
+    await sendAndLog(tenantId, customerPhone, reply, connectionBarberId);
+  }
 }
 
 /**
